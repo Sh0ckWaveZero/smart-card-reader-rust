@@ -1,0 +1,29 @@
+# Rust
+/target/
+/dist/
+
+# Frontend
+/smart-card-reader/frontend/node_modules/
+/smart-card-reader/frontend/dist/
+/smart-card-reader/frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Bun
+/smart-card-reader/frontend/bun.lockb

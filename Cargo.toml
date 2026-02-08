@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "smart-card-reader/backend"
+]
+resolver = "2"

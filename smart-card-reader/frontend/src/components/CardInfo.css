@@ -1,0 +1,156 @@
+/* =============================================
+   ID Card Display - Modern Dark Theme (Improved)
+   ============================================= */
+
+.id-card {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 3rem;
+  background: rgba(35, 40, 55, 0.7);
+  backdrop-filter: blur(20px);
+  border-radius: 28px;
+  padding: 3rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  max-width: 900px;
+  margin: 0 auto;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* Left Panel */
+.id-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+}
+
+.id-photo-wrapper {
+  width: 220px;
+  height: 280px;
+  background: linear-gradient(145deg, #1e2330, #252b3a);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.id-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.id-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.id-number {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  color: white;
+  padding: 0.9rem 1.5rem;
+  border-radius: 12px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  box-shadow: 
+    0 8px 30px rgba(99, 102, 241, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  white-space: nowrap;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Right Panel */
+.id-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.id-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.id-field.half {
+  flex: 1;
+  min-width: 0;
+}
+
+.id-field label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.id-value {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  color: #f8fafc;
+  font-weight: 500;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+  transition: all 0.2s ease;
+}
+
+.id-value:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.id-row {
+  display: flex;
+  gap: 1.25rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .id-card {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  .id-left {
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .id-photo-wrapper {
+    width: 180px;
+    height: 230px;
+  }
+
+  .id-row {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .id-number {
+    font-size: 1rem;
+    padding: 0.75rem 1.25rem;
+  }
+}
