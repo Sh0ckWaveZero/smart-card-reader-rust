@@ -18,22 +18,22 @@ Built with **Rust** (Backend) and **React + Vite** (Frontend).
 
 ```mermaid
 graph TD
-    User[User / Smart Card] -->|Insert Card| Reader[Card Reader (USB)]
-    Reader -->|APDU Commands| Backend[Rust Backend]
+    User["User / Smart Card"] -->|Insert Card| Reader["Card Reader (USB)"]
+    Reader -->|APDU Commands| Backend["Rust Backend"]
     
     subgraph "Rust Backend"
-        Monitor[Card Monitor Loop]
-        Decoder[TIS-620 Decoder]
-        WSS[WebSocket Server :8182]
+        Monitor["Card Monitor Loop"]
+        Decoder["TIS-620 Decoder"]
+        WSS["WebSocket Server :8182"]
     end
     
     Backend -->|Raw Data| Decoder
     Decoder -->|JSON Data| WSS
-    WSS -->|JSON Events| Frontend[React Frontend]
+    WSS -->|JSON Events| Frontend["React Frontend"]
     
     subgraph "React Frontend"
-        UI[Glassmorphism UI]
-        Hook[useCardReader Hook]
+        UI["Glassmorphism UI"]
+        Hook["useCardReader Hook"]
     end
     
     Frontend -->|Display Data/Photo| User
