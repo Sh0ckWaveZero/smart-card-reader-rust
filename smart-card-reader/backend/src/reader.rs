@@ -22,8 +22,8 @@ impl CardReader {
         }
     }
 
-    pub async fn run_monitor<F>(&mut self, on_card_inserted: F)
-    where F: Fn(decoder::ThaiIDData) + Send + Sync + 'static + Clone
+    pub async fn run_monitor<F>(&mut self, on_card_event: F)
+    where F: Fn(decoder::CardEvent) + Send + Sync + 'static + Clone
     {
         // Track readers that already have a card processed
         let mut card_present: HashSet<String> = HashSet::new();
@@ -104,7 +104,7 @@ impl CardReader {
                                 match self.read_thai_id(&card) {
                                     Ok(data) => {
                                         info!("Read Thai ID: {}", data.citizen_id);
-                                        on_card_inserted(data);
+                                        on_card_event(decoder::CardEvent::Inserted(data));
                                     }
                                     Err(e) => error!("Failed to read card: {}", e),
                                 }
@@ -127,6 +127,7 @@ impl CardReader {
                     // Card removed — allow re-read on next insert
                     info!("Card removed from reader: {}", name);
                     card_present.remove(&name);
+                    on_card_event(decoder::CardEvent::Removed);
                 }
             }
 
