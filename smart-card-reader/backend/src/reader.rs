@@ -3,21 +3,23 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::time::Duration;
 use tokio::time::sleep;
-use log::{info, error, warn};
+use log::{info, error, warn, debug};
 use anyhow::{Result, anyhow};
+use crate::config::CardConfig;
 use crate::decoder;
 
 pub struct CardReader {
     ctx: Option<Context>,
+    config: CardConfig,
 }
 
 impl CardReader {
-    pub fn new() -> Result<Self> {
+    pub fn new(config: CardConfig) -> Result<Self> {
         match Context::establish(Scope::User) {
-            Ok(ctx) => Ok(Self { ctx: Some(ctx) }),
+            Ok(ctx) => Ok(Self { ctx: Some(ctx), config }),
             Err(e) => {
                 warn!("Failed to establish PCSC context: {}. Retrying later.", e);
-                Ok(Self { ctx: None })
+                Ok(Self { ctx: None, config })
             }
         }
     }
@@ -93,10 +95,14 @@ impl CardReader {
                     // New card detected
                     info!("Card detected in reader: {}", name);
 
+                    let retry_attempts = self.config.retry_attempts;
+                    let retry_delay = Duration::from_millis(self.config.retry_delay_ms);
+                    let settle_delay = Duration::from_millis(self.config.card_settle_delay_ms);
+
                     let mut connected = false;
-                    for attempt in 1..=3 {
+                    for attempt in 1..=retry_attempts {
                         // Wait for card to settle after insertion
-                        sleep(Duration::from_millis(500)).await;
+                        sleep(settle_delay).await;
 
                         match ctx.connect(rs.name(), ShareMode::Shared, Protocols::ANY) {
                             Ok(card) => {
@@ -112,7 +118,10 @@ impl CardReader {
                                 break;
                             }
                             Err(e) => {
-                                warn!("Failed to connect to card (attempt {}/3): {}", attempt, e);
+                                warn!("Failed to connect to card (attempt {}/{}): {}", attempt, retry_attempts, e);
+                                if attempt < retry_attempts {
+                                    sleep(retry_delay).await;
+                                }
                             }
                         }
                     }
@@ -136,55 +145,43 @@ impl CardReader {
     }
 
     pub fn read_thai_id(&self, card: &Card) -> Result<decoder::ThaiIDData> {
-        // SELECT Thai ID Applet
-        let select_apdu = [0x00, 0xa4, 0x04, 0x00, 0x08, 0xa0, 0x00, 0x00, 0x00, 0x54, 0x48, 0x00, 0x01];
+        // SELECT Thai ID Applet from config
+        let select_apdu = self.config.select_apdu_bytes();
+        debug!("SELECT APDU: {:02X?}", select_apdu);
         self.send_apdu(card, &select_apdu)?;
 
-        // Helper to read data
-        let read_attr = |cmd: &[u8]| -> Result<String> {
-            let data = self.send_apdu(card, cmd)?;
-            Ok(decoder::decode_tis620(&data))
+        // Helper to read field by name from config
+        let read_field = |name: &str| -> Result<String> {
+            if let Some(field) = self.config.get_field(name) {
+                let apdu = field.to_bytes();
+                debug!("Reading {}: APDU {:02X?}", name, apdu);
+                let data = self.send_apdu(card, &apdu)?;
+                Ok(decoder::decode_tis620(&data))
+            } else {
+                warn!("Field '{}' not found in config, using empty string", name);
+                Ok(String::new())
+            }
         };
 
-        let citizen_id = read_attr(&[0x80, 0xb0, 0x00, 0x04, 0x02, 0x00, 0x0d])?;
-        let full_name_th = read_attr(&[0x80, 0xb0, 0x00, 0x11, 0x02, 0x00, 0x64])?;
-        let full_name_en = read_attr(&[0x80, 0xb0, 0x00, 0x75, 0x02, 0x00, 0x64])?;
-        let date_of_birth = read_attr(&[0x80, 0xb0, 0x00, 0xd9, 0x02, 0x00, 0x08])?;
-        let gender = read_attr(&[0x80, 0xb0, 0x00, 0xe1, 0x02, 0x00, 0x01])?;
-        let card_issuer = read_attr(&[0x80, 0xb0, 0x00, 0xf6, 0x02, 0x00, 0x64])?;
-        let issue_date = read_attr(&[0x80, 0xb0, 0x01, 0x67, 0x02, 0x00, 0x08])?;
-        let expire_date = read_attr(&[0x80, 0xb0, 0x01, 0x6f, 0x02, 0x00, 0x08])?;
-        let address = read_attr(&[0x80, 0xb0, 0x15, 0x79, 0x02, 0x00, 0x64])?;
+        // Read all configured fields
+        let citizen_id = read_field("citizen_id")?;
+        let full_name_th = read_field("full_name_th")?;
+        let full_name_en = read_field("full_name_en")?;
+        let date_of_birth = read_field("date_of_birth")?;
+        let gender = read_field("gender")?;
+        let card_issuer = read_field("card_issuer").unwrap_or_default();
+        let issue_date = read_field("issue_date")?;
+        let expire_date = read_field("expire_date")?;
+        let address = read_field("address").unwrap_or_default();
 
-        // Read Photo
+        // Read Photo using configured chunk APDUs
         let mut photo_chunks = Vec::new();
-        let photo_cmds: Vec<&[u8]> = vec![
-            &[0x80, 0xb0, 0x01, 0x7b, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x02, 0x7a, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x03, 0x79, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x04, 0x78, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x05, 0x77, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x06, 0x76, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x07, 0x75, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x08, 0x74, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x09, 0x73, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0a, 0x72, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0b, 0x71, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0c, 0x70, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0d, 0x6f, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0e, 0x6e, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x0f, 0x6d, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x10, 0x6c, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x11, 0x6b, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x12, 0x6a, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x13, 0x69, 0x02, 0x00, 0xff],
-            &[0x80, 0xb0, 0x14, 0x68, 0x02, 0x00, 0xff],
-        ];
+        let photo_apdus = self.config.photo_chunk_bytes();
 
-        for (i, cmd) in photo_cmds.iter().enumerate() {
-            match self.send_apdu(card, cmd) {
+        for (i, apdu) in photo_apdus.iter().enumerate() {
+            match self.send_apdu(card, apdu) {
                 Ok(data) => {
-                    info!("Photo chunk {}: {} bytes", i + 1, data.len());
+                    debug!("Photo chunk {}: {} bytes", i + 1, data.len());
                     photo_chunks.push(data);
                 }
                 Err(e) => {

@@ -1,0 +1,143 @@
+# Thai Smart Card Reader Configuration
+# ===================================
+# This file configures all aspects of the smart card reader application.
+# Modify values below to customize behavior without recompiling.
+
+[server]
+# WebSocket server binding address
+# Use "0.0.0.0" to allow external connections
+host = "127.0.0.1"
+port = 8182
+
+# Allow all CORS origins (disable for production with specific origins)
+cors_allow_all = true
+
+[output]
+# Output format: "standard" | "minimal" | "full"
+# - standard: All fields with photo
+# - minimal: Essential fields only (citizen_id, names, dates)
+# - full: All fields plus metadata
+format = "standard"
+
+# Include base64-encoded photo in output
+include_photo = true
+
+# Field mapping - rename output field names
+# Uncomment and modify to map field names to your API format
+# [output.field_mapping]
+# citizen_id = "nationalId"
+# full_name_th = "nameThai"
+# full_name_en = "nameEnglish"
+# date_of_birth = "birthDate"
+# gender = "sex"
+# card_issuer = "issuer"
+# issue_date = "issuedAt"
+# expire_date = "expiresAt"
+# address = "address"
+# photo = "photoBase64"
+
+# Fields to include in output (empty array = all fields)
+# Uncomment to filter output fields
+# enabled_fields = ["citizen_id", "full_name_th", "full_name_en", "date_of_birth"]
+enabled_fields = []
+
+[ui]
+# Application window settings
+window_title = "Thai Smart Card Reader"
+window_width = 800.0
+window_height = 600.0
+min_width = 600.0
+min_height = 400.0
+
+[fonts]
+# Custom font paths (checked first before system fonts)
+# Add paths to Thai-supporting fonts here
+# custom_paths = ["/path/to/NotoSansThai-Regular.ttf"]
+custom_paths = []
+
+# Search system fonts if custom fonts not found
+use_system_fonts = true
+
+[logging]
+# Log level: "trace" | "debug" | "info" | "warn" | "error"
+level = "info"
+
+[card]
+# SELECT APDU for Thai ID applet (hex string)
+select_apdu = "00A4040008A000000054480001"
+
+# Connection retry settings
+retry_attempts = 3
+retry_delay_ms = 500
+card_settle_delay_ms = 500
+
+# Field APDU commands
+# Each field has: name, apdu (hex), required (optional, default true)
+[[card.fields]]
+name = "citizen_id"
+apdu = "80B0000402000D"
+required = true
+
+[[card.fields]]
+name = "full_name_th"
+apdu = "80B00011020064"
+required = true
+
+[[card.fields]]
+name = "full_name_en"
+apdu = "80B00075020064"
+required = true
+
+[[card.fields]]
+name = "date_of_birth"
+apdu = "80B000D9020008"
+required = true
+
+[[card.fields]]
+name = "gender"
+apdu = "80B000E1020001"
+required = true
+
+[[card.fields]]
+name = "card_issuer"
+apdu = "80B000F6020064"
+required = false
+
+[[card.fields]]
+name = "issue_date"
+apdu = "80B00167020008"
+required = true
+
+[[card.fields]]
+name = "expire_date"
+apdu = "80B0016F020008"
+required = true
+
+[[card.fields]]
+name = "address"
+apdu = "80B01579020064"
+required = false
+
+# Photo chunk APDU commands (20 chunks for Thai ID photo)
+photo_chunks = [
+    "80B0017B0200FF",
+    "80B0027A0200FF",
+    "80B003790200FF",
+    "80B004780200FF",
+    "80B005770200FF",
+    "80B006760200FF",
+    "80B007750200FF",
+    "80B008740200FF",
+    "80B009730200FF",
+    "80B00A720200FF",
+    "80B00B710200FF",
+    "80B00C700200FF",
+    "80B00D6F0200FF",
+    "80B00E6E0200FF",
+    "80B00F6D0200FF",
+    "80B0106C0200FF",
+    "80B0116B0200FF",
+    "80B0126A0200FF",
+    "80B013690200FF",
+    "80B014680200FF",
+]

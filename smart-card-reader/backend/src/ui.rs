@@ -1,3 +1,4 @@
+use crate::config::FontConfig;
 use crate::decoder::{format_thai_date, CardEvent, ThaiIDData};
 use chrono::Local;
 use eframe::egui;
@@ -5,8 +6,18 @@ use std::sync::mpsc::Receiver;
 
 const MAX_LOGS: usize = 100;
 
-fn get_font_paths() -> Vec<std::path::PathBuf> {
+fn get_font_paths(font_config: &FontConfig) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
+
+    // Custom paths from config (highest priority)
+    for custom_path in &font_config.custom_paths {
+        paths.push(std::path::PathBuf::from(custom_path));
+    }
+
+    // Skip system fonts if disabled
+    if !font_config.use_system_fonts {
+        return paths;
+    }
 
     // Try relative to executable first
     if let Ok(exe_path) = std::env::current_exe() {
@@ -72,11 +83,11 @@ fn get_font_paths() -> Vec<std::path::PathBuf> {
     paths
 }
 
-fn setup_fonts(ctx: &egui::Context) {
+fn setup_fonts(ctx: &egui::Context, font_config: &FontConfig) {
     let mut fonts = egui::FontDefinitions::default();
 
     log::info!("Searching for Thai fonts...");
-    for path in get_font_paths() {
+    for path in get_font_paths(font_config) {
         log::debug!("Checking font path: {:?}", path);
         if let Ok(font_data) = std::fs::read(&path) {
             let font_data = egui::FontData::from_owned(font_data);
@@ -120,7 +131,7 @@ fn setup_fonts(ctx: &egui::Context) {
     }
 
     log::warn!("Thai font not found! Tried the following paths:");
-    for path in get_font_paths() {
+    for path in get_font_paths(font_config) {
         log::warn!("  - {:?} (exists: {})", path, path.exists());
     }
     log::warn!("Thai text will display as boxes. Please ensure a Thai font is available.");
@@ -134,10 +145,12 @@ pub struct SmartCardApp {
     photo_texture: Option<egui::TextureHandle>,
     last_read_time: Option<String>,
     fonts_configured: bool,
+    ws_url: String,
+    font_config: FontConfig,
 }
 
 impl SmartCardApp {
-    pub fn new(rx: Receiver<CardEvent>) -> Self {
+    pub fn new(rx: Receiver<CardEvent>, ws_url: String, font_config: FontConfig) -> Self {
         Self {
             rx,
             card_data: None,
@@ -145,6 +158,8 @@ impl SmartCardApp {
             photo_texture: None,
             last_read_time: None,
             fonts_configured: false,
+            ws_url,
+            font_config,
         }
     }
 
@@ -205,7 +220,7 @@ impl eframe::App for SmartCardApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Setup fonts only once
         if !self.fonts_configured {
-            setup_fonts(ctx);
+            setup_fonts(ctx, &self.font_config);
             self.fonts_configured = true;
         }
 
@@ -237,7 +252,7 @@ impl eframe::App for SmartCardApp {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Smart Card Reader").strong());
                 ui.separator();
-                ui.label("WebSocket: ws://127.0.0.1:8182/ws");
+                ui.label(format!("WebSocket: {}", self.ws_url));
                 ui.separator();
                 if let Some(time) = &self.last_read_time {
                     ui.label(format!("Last read: {}", time));

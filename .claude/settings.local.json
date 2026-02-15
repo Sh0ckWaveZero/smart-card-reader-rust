@@ -3,7 +3,11 @@
     "allow": [
       "Bash(cargo build:*)",
       "Bash(cargo clean:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cargo test:*)",
+      "Bash(xxd:*)",
+      "Bash(python3:*)",
+      "Bash(cargo check:*)"
     ]
   }
 }

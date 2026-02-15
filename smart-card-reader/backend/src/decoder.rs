@@ -1,5 +1,7 @@
+use crate::config::OutputConfig;
 use encoding_rs::WINDOWS_874;
-use serde::{Deserialize, Serialize}; // TIS-620 is effectively Windows-874
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use unicode_normalization::UnicodeNormalization;
 
 /// Events from the card reader
@@ -70,4 +72,41 @@ pub fn format_thai_date(date_str: &str) -> String {
     let day_num: u32 = day.parse().unwrap_or(0);
 
     format!("{} {} {}", day_num, month_name, year)
+}
+
+/// Apply output configuration to card data
+/// - Filter enabled fields
+/// - Apply field mapping
+/// - Optionally exclude photo
+pub fn apply_output_config(data: &ThaiIDData, config: &OutputConfig) -> Value {
+    let mut result = serde_json::Map::new();
+
+    // Define all available fields
+    let fields = [
+        ("citizen_id", &data.citizen_id),
+        ("full_name_th", &data.full_name_th),
+        ("full_name_en", &data.full_name_en),
+        ("date_of_birth", &data.date_of_birth),
+        ("gender", &data.gender),
+        ("card_issuer", &data.card_issuer),
+        ("issue_date", &data.issue_date),
+        ("expire_date", &data.expire_date),
+        ("address", &data.address),
+    ];
+
+    // Process each field
+    for (field_name, field_value) in fields {
+        if config.is_field_enabled(field_name) {
+            let output_name = config.get_field_name(field_name).to_owned();
+            result.insert(output_name, json!(field_value));
+        }
+    }
+
+    // Handle photo separately (can be large)
+    if config.include_photo && config.is_field_enabled("photo") {
+        let output_name = config.get_field_name("photo").to_owned();
+        result.insert(output_name, json!(&data.photo));
+    }
+
+    Value::Object(result)
 }
