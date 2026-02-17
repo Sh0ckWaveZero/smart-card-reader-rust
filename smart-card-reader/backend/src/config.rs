@@ -19,11 +19,13 @@ pub const DEFAULT_HOST: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 pub const DEFAULT_PORT: u16 = 8182;
 /// Default window title
 pub const DEFAULT_WINDOW_TITLE: &str = "Thai Smart Card Reader";
-/// Default window dimensions
-pub const DEFAULT_WINDOW_WIDTH: f32 = 800.0;
-pub const DEFAULT_WINDOW_HEIGHT: f32 = 600.0;
-pub const DEFAULT_MIN_WIDTH: f32 = 600.0;
-pub const DEFAULT_MIN_HEIGHT: f32 = 400.0;
+/// Default window dimensions (fixed size - cannot be resized)
+pub const DEFAULT_WINDOW_WIDTH: f32 = 900.0;
+pub const DEFAULT_WINDOW_HEIGHT: f32 = 620.0;
+pub const DEFAULT_MIN_WIDTH: f32 = 900.0;
+pub const DEFAULT_MIN_HEIGHT: f32 = 620.0;
+pub const DEFAULT_MAX_WIDTH: f32 = 900.0;
+pub const DEFAULT_MAX_HEIGHT: f32 = 620.0;
 /// Default log level
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 /// Environment variable for config path
@@ -180,7 +182,7 @@ impl ServerConfig {
     /// Returns the WebSocket URL for client connections
     #[must_use]
     pub fn websocket_url(&self) -> String {
-        format!("ws://{}:{}/ws", self.host, self.port)
+        format!("ws://{}:{}", self.host, self.port)
     }
 
     /// Returns the socket address for binding
@@ -255,6 +257,10 @@ pub struct UiConfig {
     pub min_width: f32,
     /// Minimum window height
     pub min_height: f32,
+    /// Maximum window width (set equal to min to lock size)
+    pub max_width: f32,
+    /// Maximum window height (set equal to min to lock size)
+    pub max_height: f32,
 }
 
 impl Default for UiConfig {
@@ -265,10 +271,11 @@ impl Default for UiConfig {
             window_height: DEFAULT_WINDOW_HEIGHT,
             min_width: DEFAULT_MIN_WIDTH,
             min_height: DEFAULT_MIN_HEIGHT,
+            max_width: DEFAULT_MAX_WIDTH,
+            max_height: DEFAULT_MAX_HEIGHT,
         }
     }
 }
-
 
 /// Font configuration
 #[derive(Debug, Clone, Deserialize)]
@@ -288,7 +295,6 @@ impl Default for FontConfig {
         }
     }
 }
-
 
 /// Logging configuration
 #[derive(Debug, Clone, Deserialize)]
@@ -585,7 +591,7 @@ mod tests {
     #[test]
     fn test_server_websocket_url() {
         let config = ServerConfig::default();
-        assert_eq!(config.websocket_url(), "ws://127.0.0.1:8182/ws");
+        assert_eq!(config.websocket_url(), "ws://127.0.0.1:8182");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { ThaiIDData, CardEvent } from '../types'
 
-const WS_URL = 'ws://localhost:8182/ws'
+const WS_URL = 'ws://localhost:8182'
 const RECONNECT_INTERVAL = 3000
 
 export function useCardReader() {

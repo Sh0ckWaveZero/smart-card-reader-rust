@@ -43,7 +43,7 @@ fn main() {
 
             use tower_http::cors::{Any, CorsLayer};
             let app = Router::new()
-                .route("/ws", get(server::ws_handler))
+                .route("/", get(server::ws_handler))
                 .with_state(app_state)
                 .layer(
                     CorsLayer::new()
@@ -106,6 +106,8 @@ fn main() {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([ui_config.window_width, ui_config.window_height])
             .with_min_inner_size([ui_config.min_width, ui_config.min_height])
+            .with_max_inner_size([ui_config.max_width, ui_config.max_height])
+            .with_resizable(false)
             .with_title(&ui_config.window_title),
         ..Default::default()
     };

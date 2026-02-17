@@ -6,6 +6,96 @@ use std::sync::mpsc::Receiver;
 
 const MAX_LOGS: usize = 100;
 
+// ---------------------------------------------------------------------------
+// Language
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Language {
+    En,
+    Th,
+}
+
+/// All UI strings in both languages.
+struct T {
+    app_title: &'static str,
+    websocket: &'static str,
+    last_read: &'static str,
+    waiting: &'static str,
+    btn_show: &'static str,
+    btn_hide: &'static str,
+    logs: &'static str,
+    photo: &'static str,
+    no_photo: &'static str,
+    card_info: &'static str,
+    citizen_id: &'static str,
+    name_th: &'static str,
+    name_en: &'static str,
+    dob: &'static str,
+    gender: &'static str,
+    card_issuer: &'static str,
+    issue_date: &'static str,
+    expire_date: &'static str,
+    address: &'static str,
+    insert_card: &'static str,
+    insert_card_hint: &'static str,
+}
+
+const EN: T = T {
+    app_title: "Smart Card Reader",
+    websocket: "WebSocket:",
+    last_read: "Last read:",
+    waiting: "Waiting for card...",
+    btn_show: "👁  Show Data",
+    btn_hide: "🚫 Hide Data",
+    logs: "Logs",
+    photo: "Photo",
+    no_photo: "No photo",
+    card_info: "Card Information",
+    citizen_id: "Citizen ID:",
+    name_th: "Name (TH):",
+    name_en: "Name (EN):",
+    dob: "Date of Birth:",
+    gender: "Gender:",
+    card_issuer: "Card Issuer:",
+    issue_date: "Issue Date:",
+    expire_date: "Expire Date:",
+    address: "Address:",
+    insert_card: "Please insert a Thai ID card",
+    insert_card_hint: "Card data will appear here automatically.",
+};
+
+const TH: T = T {
+    app_title: "เครื่องอ่านบัตรประชาชน",
+    websocket: "WebSocket:",
+    last_read: "อ่านล่าสุด:",
+    waiting: "รอการ์ด...",
+    btn_show: "👁  แสดงข้อมูล",
+    btn_hide: "🚫 ซ่อนข้อมูล",
+    logs: "บันทึก",
+    photo: "รูปภาพ",
+    no_photo: "ไม่มีรูป",
+    card_info: "ข้อมูลบัตร",
+    citizen_id: "เลขบัตรประชาชน:",
+    name_th: "ชื่อ-นามสกุล (ไทย):",
+    name_en: "ชื่อ-นามสกุล (อังกฤษ):",
+    dob: "วันเกิด:",
+    gender: "เพศ:",
+    card_issuer: "หน่วยงานออกบัตร:",
+    issue_date: "วันออกบัตร:",
+    expire_date: "วันหมดอายุ:",
+    address: "ที่อยู่:",
+    insert_card: "กรุณาใส่บัตรประชาชน",
+    insert_card_hint: "ข้อมูลจะแสดงที่นี่โดยอัตโนมัติ",
+};
+
+fn t(lang: Language) -> &'static T {
+    match lang {
+        Language::En => &EN,
+        Language::Th => &TH,
+    }
+}
+
 fn get_font_paths(font_config: &FontConfig) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
 
@@ -37,21 +127,11 @@ fn get_font_paths(font_config: &FontConfig) -> Vec<std::path::PathBuf> {
     paths.push(std::path::PathBuf::from("fonts/NotoSansThai-Regular.ttf"));
 
     // System fonts - Windows (Thai-supporting fonts)
-    paths.push(std::path::PathBuf::from(
-        "C:\\Windows\\Fonts\\LeelawUI.ttf",
-    )); // Leelawadee UI - best Thai font on Windows
-    paths.push(std::path::PathBuf::from(
-        "C:\\Windows\\Fonts\\LeelUIsl.ttf",
-    )); // Leelawadee UI Semilight
-    paths.push(std::path::PathBuf::from(
-        "C:\\Windows\\Fonts\\tahoma.ttf",
-    )); // Tahoma - fallback
-    paths.push(std::path::PathBuf::from(
-        "C:\\Windows\\Fonts\\cordia.ttf",
-    )); // Cordia New
-    paths.push(std::path::PathBuf::from(
-        "C:\\Windows\\Fonts\\angsau.ttf",
-    )); // AngsanaUPC
+    paths.push(std::path::PathBuf::from("C:\\Windows\\Fonts\\LeelawUI.ttf")); // Leelawadee UI - best Thai font on Windows
+    paths.push(std::path::PathBuf::from("C:\\Windows\\Fonts\\LeelUIsl.ttf")); // Leelawadee UI Semilight
+    paths.push(std::path::PathBuf::from("C:\\Windows\\Fonts\\tahoma.ttf")); // Tahoma - fallback
+    paths.push(std::path::PathBuf::from("C:\\Windows\\Fonts\\cordia.ttf")); // Cordia New
+    paths.push(std::path::PathBuf::from("C:\\Windows\\Fonts\\angsau.ttf")); // AngsanaUPC
 
     // System fonts - Linux
     paths.push(std::path::PathBuf::from(
@@ -91,10 +171,9 @@ fn setup_fonts(ctx: &egui::Context, font_config: &FontConfig) {
         log::debug!("Checking font path: {:?}", path);
         if let Ok(font_data) = std::fs::read(&path) {
             let font_data = egui::FontData::from_owned(font_data);
-            fonts.font_data.insert(
-                "noto_sans_thai".to_owned(),
-                std::sync::Arc::new(font_data),
-            );
+            fonts
+                .font_data
+                .insert("noto_sans_thai".to_owned(), std::sync::Arc::new(font_data));
 
             fonts
                 .families
@@ -138,15 +217,23 @@ fn setup_fonts(ctx: &egui::Context, font_config: &FontConfig) {
     ctx.set_fonts(fonts);
 }
 
+// Embedded flag images (PNG bytes baked into binary)
+const FLAG_TH_PNG: &[u8] = include_bytes!("../assets/flag_th.png");
+const FLAG_GB_PNG: &[u8] = include_bytes!("../assets/flag_gb.png");
+
 pub struct SmartCardApp {
     rx: Receiver<CardEvent>,
     card_data: Option<ThaiIDData>,
     logs: Vec<String>,
     photo_texture: Option<egui::TextureHandle>,
+    flag_th: Option<egui::TextureHandle>,
+    flag_gb: Option<egui::TextureHandle>,
     last_read_time: Option<String>,
     fonts_configured: bool,
     ws_url: String,
     font_config: FontConfig,
+    data_hidden: bool,
+    lang: Language,
 }
 
 impl SmartCardApp {
@@ -154,12 +241,19 @@ impl SmartCardApp {
         Self {
             rx,
             card_data: None,
-            logs: vec![format!("[{}] Application started", Local::now().format("%H:%M:%S"))],
+            logs: vec![format!(
+                "[{}] Application started",
+                Local::now().format("%H:%M:%S")
+            )],
             photo_texture: None,
+            flag_th: None,
+            flag_gb: None,
             last_read_time: None,
             fonts_configured: false,
             ws_url,
             font_config,
+            data_hidden: true,
+            lang: Language::Th,
         }
     }
 
@@ -177,6 +271,27 @@ impl SmartCardApp {
         }
     }
 
+    fn load_flag_textures(&mut self, ctx: &egui::Context) {
+        if self.flag_th.is_none() {
+            if let Ok(img) = image::load_from_memory(FLAG_TH_PNG) {
+                let rgba = img.to_rgba8();
+                let size = [rgba.width() as usize, rgba.height() as usize];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &rgba.into_raw());
+                self.flag_th =
+                    Some(ctx.load_texture("flag_th", color_image, egui::TextureOptions::LINEAR));
+            }
+        }
+        if self.flag_gb.is_none() {
+            if let Ok(img) = image::load_from_memory(FLAG_GB_PNG) {
+                let rgba = img.to_rgba8();
+                let size = [rgba.width() as usize, rgba.height() as usize];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &rgba.into_raw());
+                self.flag_gb =
+                    Some(ctx.load_texture("flag_gb", color_image, egui::TextureOptions::LINEAR));
+            }
+        }
+    }
+
     fn load_photo_texture(&mut self, ctx: &egui::Context, base64_photo: &str) {
         // Decode base64 to bytes
         use base64::Engine;
@@ -189,7 +304,8 @@ impl SmartCardApp {
         };
 
         // Try to load as JPEG
-        let img = match image::load_from_memory_with_format(&photo_bytes, image::ImageFormat::Jpeg) {
+        let img = match image::load_from_memory_with_format(&photo_bytes, image::ImageFormat::Jpeg)
+        {
             Ok(img) => img,
             Err(_) => {
                 // Try without format hint
@@ -208,11 +324,8 @@ impl SmartCardApp {
         let pixels = rgba.into_raw();
 
         let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
-        self.photo_texture = Some(ctx.load_texture(
-            "id_photo",
-            color_image,
-            egui::TextureOptions::LINEAR,
-        ));
+        self.photo_texture =
+            Some(ctx.load_texture("id_photo", color_image, egui::TextureOptions::LINEAR));
     }
 }
 
@@ -223,6 +336,9 @@ impl eframe::App for SmartCardApp {
             setup_fonts(ctx, &self.font_config);
             self.fonts_configured = true;
         }
+
+        // Load flag textures once
+        self.load_flag_textures(ctx);
 
         // Check for card events
         while let Ok(event) = self.rx.try_recv() {
@@ -248,50 +364,146 @@ impl eframe::App for SmartCardApp {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
 
         // Top panel - Status bar
+        let tr = t(self.lang);
         egui::TopBottomPanel::top("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Smart Card Reader").strong());
+                ui.label(egui::RichText::new(tr.app_title).strong());
                 ui.separator();
-                ui.label(format!("WebSocket: {}", self.ws_url));
+                ui.label(format!("{} {}", tr.websocket, self.ws_url));
                 ui.separator();
                 if let Some(time) = &self.last_read_time {
-                    ui.label(format!("Last read: {}", time));
+                    ui.label(format!("{} {}", tr.last_read, time));
                 } else {
-                    ui.label("Waiting for card...");
+                    ui.label(tr.waiting);
                 }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Language toggle — flag image + label
+                    let (flag_tex, lang_text, next_lang) = match self.lang {
+                        Language::En => (self.flag_th.as_ref(), "TH", Language::Th),
+                        Language::Th => (self.flag_gb.as_ref(), "EN", Language::En),
+                    };
+
+                    let clicked = ui
+                        .horizontal(|ui| {
+                            let resp = ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new(lang_text)
+                                        .color(egui::Color32::from_rgb(251, 191, 36)),
+                                )
+                                .min_size(egui::vec2(30.0, 0.0)),
+                            );
+                            if let Some(tex) = flag_tex {
+                                let size = tex.size_vec2();
+                                let scale = 20.0 / size.y;
+                                ui.add(egui::Image::new((tex.id(), size * scale)));
+                            }
+                            resp.clicked()
+                        })
+                        .inner;
+
+                    if clicked {
+                        self.lang = next_lang;
+                    }
+
+                    // Show/hide toggle - only when card data is present
+                    if self.card_data.is_some() {
+                        ui.separator();
+                        let (label, color) = if self.data_hidden {
+                            (tr.btn_show, egui::Color32::from_rgb(129, 140, 248))
+                        } else {
+                            (tr.btn_hide, egui::Color32::from_rgb(148, 163, 184))
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new(label).color(color))
+                                    .min_size(egui::vec2(130.0, 0.0)),
+                            )
+                            .clicked()
+                        {
+                            self.data_hidden = !self.data_hidden;
+                        }
+                    }
+                });
             });
         });
 
         // Bottom panel - Logs (full width)
+        let tr = t(self.lang);
         egui::TopBottomPanel::bottom("logs_panel")
             .resizable(true)
-            .min_height(100.0)
+            .min_height(120.0)
+            .default_height(160.0)
             .show(ctx, |ui| {
-                ui.heading("Logs");
+                ui.label(egui::RichText::new(tr.logs).size(13.0).strong());
                 egui::ScrollArea::both()
                     .stick_to_bottom(true)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         for log in &self.logs {
-                            ui.add(egui::Label::new(log).wrap_mode(egui::TextWrapMode::Extend));
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(log).size(14.0))
+                                    .wrap_mode(egui::TextWrapMode::Extend),
+                            );
                         }
                     });
             });
 
         // Central panel - Card data
+        let data_hidden = self.data_hidden;
+        let tr = t(self.lang);
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(data) = &self.card_data {
+                // Helper: masked value when hidden
+                let mask = |_s: &str| "••••••••••••".to_string();
+
+                const PHOTO_W: f32 = 180.0;
+                const PHOTO_H: f32 = 240.0;
+
                 ui.horizontal(|ui| {
                     // Left side - Photo
                     ui.vertical(|ui| {
-                        ui.heading("Photo");
-                        if let Some(texture) = &self.photo_texture {
-                            let size = texture.size_vec2();
-                            let scale = 150.0 / size.x.max(size.y);
-                            ui.image((texture.id(), size * scale));
+                        ui.heading(tr.photo);
+                        if data_hidden {
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::vec2(PHOTO_W, PHOTO_H),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter().rect_filled(
+                                rect,
+                                8.0,
+                                egui::Color32::from_rgb(40, 45, 60),
+                            );
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "🔒",
+                                egui::FontId::proportional(36.0),
+                                egui::Color32::from_rgb(100, 116, 139),
+                            );
+                        } else if let Some(texture) = &self.photo_texture {
+                            ui.add(
+                                egui::Image::new((texture.id(), egui::vec2(PHOTO_W, PHOTO_H)))
+                                    .fit_to_exact_size(egui::vec2(PHOTO_W, PHOTO_H)),
+                            );
                         } else {
-                            ui.label("No photo available");
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::vec2(PHOTO_W, PHOTO_H),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter().rect_filled(
+                                rect,
+                                8.0,
+                                egui::Color32::from_rgb(40, 45, 60),
+                            );
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                tr.no_photo,
+                                egui::FontId::proportional(14.0),
+                                egui::Color32::from_rgb(100, 116, 139),
+                            );
                         }
                     });
 
@@ -299,58 +511,94 @@ impl eframe::App for SmartCardApp {
 
                     // Right side - Card details
                     ui.vertical(|ui| {
-                        ui.heading("Card Information");
+                        ui.heading(tr.card_info);
                         ui.add_space(10.0);
 
                         egui::Grid::new("card_info_grid")
                             .num_columns(2)
                             .spacing([20.0, 8.0])
                             .show(ui, |ui| {
-                                ui.label(egui::RichText::new("Citizen ID:").strong());
-                                ui.label(&data.citizen_id);
+                                ui.label(egui::RichText::new(tr.citizen_id).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.citizen_id)
+                                } else {
+                                    data.citizen_id.clone()
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Name (TH):").strong());
-                                ui.label(&data.full_name_th);
+                                ui.label(egui::RichText::new(tr.name_th).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.full_name_th)
+                                } else {
+                                    data.full_name_th.clone()
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Name (EN):").strong());
-                                ui.label(&data.full_name_en);
+                                ui.label(egui::RichText::new(tr.name_en).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.full_name_en)
+                                } else {
+                                    data.full_name_en.clone()
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Date of Birth:").strong());
-                                ui.label(format_thai_date(&data.date_of_birth));
+                                ui.label(egui::RichText::new(tr.dob).strong());
+                                ui.label(if data_hidden {
+                                    mask("")
+                                } else {
+                                    format_thai_date(&data.date_of_birth)
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Gender:").strong());
-                                ui.label(&data.gender);
+                                ui.label(egui::RichText::new(tr.gender).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.gender)
+                                } else {
+                                    data.gender.clone()
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Card Issuer:").strong());
-                                ui.label(&data.card_issuer);
+                                ui.label(egui::RichText::new(tr.card_issuer).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.card_issuer)
+                                } else {
+                                    data.card_issuer.clone()
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Issue Date:").strong());
-                                ui.label(format_thai_date(&data.issue_date));
+                                ui.label(egui::RichText::new(tr.issue_date).strong());
+                                ui.label(if data_hidden {
+                                    mask("")
+                                } else {
+                                    format_thai_date(&data.issue_date)
+                                });
                                 ui.end_row();
 
-                                ui.label(egui::RichText::new("Expire Date:").strong());
-                                ui.label(format_thai_date(&data.expire_date));
+                                ui.label(egui::RichText::new(tr.expire_date).strong());
+                                ui.label(if data_hidden {
+                                    mask("")
+                                } else {
+                                    format_thai_date(&data.expire_date)
+                                });
+                                ui.end_row();
+
+                                ui.label(egui::RichText::new(tr.address).strong());
+                                ui.label(if data_hidden {
+                                    mask(&data.address)
+                                } else {
+                                    data.address.clone()
+                                });
                                 ui.end_row();
                             });
-
-                        ui.add_space(10.0);
-                        ui.label(egui::RichText::new("Address:").strong());
-                        ui.label(&data.address);
                     });
                 });
             } else {
                 ui.centered_and_justified(|ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(50.0);
-                        ui.heading("Please insert a Thai ID card");
+                        ui.heading(tr.insert_card);
                         ui.add_space(20.0);
-                        ui.label("The card data will appear here automatically.");
+                        ui.label(tr.insert_card_hint);
                     });
                 });
             }
