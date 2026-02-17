@@ -13,41 +13,43 @@ port = 8182
 cors_allow_all = true
 
 [output]
-# Output format: "standard" | "minimal" | "full"
-# - standard: All fields with photo
-# - minimal: Essential fields only (citizen_id, names, dates)
-# - full: All fields plus metadata
 format = "standard"
 
 # Include base64-encoded photo in output
 include_photo = true
 
-# Field mapping - rename output field names
-# Uncomment and modify to map field names to your API format
-# [output.field_mapping]
-# citizen_id = "nationalId"
-# full_name_th = "nameThai"
-# full_name_en = "nameEnglish"
-# date_of_birth = "birthDate"
-# gender = "sex"
-# card_issuer = "issuer"
-# issue_date = "issuedAt"
-# expire_date = "expiresAt"
-# address = "address"
-# photo = "photoBase64"
-
-# Fields to include in output (empty array = all fields)
-# Uncomment to filter output fields
-# enabled_fields = ["citizen_id", "full_name_th", "full_name_en", "date_of_birth"]
+# Fields to include in output (empty = all fields)
 enabled_fields = []
+
+# Field name mapping (internal -> output key)
+[output.field_mapping]
+Citizenid     = "Citizenid"
+Th_Prefix     = "Th_Prefix"
+Th_Firstname  = "Th_Firstname"
+Th_Middlename = "Th_Middlename"
+Th_Lastname   = "Th_Lastname"
+full_name_en  = "full_name_en"
+Birthday      = "Birthday"
+Sex           = "Sex"
+card_issuer   = "card_issuer"
+issue_date    = "issue_date"
+expire_date   = "expire_date"
+Address       = "Address"
+addrHouseNo   = "addrHouseNo"
+addrVillageNo = "addrVillageNo"
+addrTambol    = "addrTambol"
+addrAmphur    = "addrAmphur"
+PhotoRaw      = "PhotoRaw"
 
 [ui]
 # Application window settings
 window_title = "Thai Smart Card Reader"
-window_width = 800.0
-window_height = 600.0
-min_width = 600.0
-min_height = 400.0
+window_width = 1100.0
+window_height = 750.0
+min_width = 1100.0
+min_height = 750.0
+max_width = 1100.0
+max_height = 750.0
 
 [fonts]
 # Custom font paths (checked first before system fonts)
@@ -115,7 +117,7 @@ required = true
 
 [[card.fields]]
 name = "address"
-apdu = "80B01579020064"
+apdu = "80B015790200FF"
 required = false
 
 # Photo chunk APDU commands (20 chunks for Thai ID photo)

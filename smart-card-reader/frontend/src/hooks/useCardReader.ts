@@ -23,8 +23,12 @@ export function useCardReader() {
     ws.onmessage = (event) => {
       try {
         const msg: CardEvent = JSON.parse(event.data)
-        if (msg.type === 'CARD_INSERTED') {
-          setCardData(msg.data)
+        if (msg.mode === 'readsmartcard') {
+          // msg is flat — extract ThaiIDData fields directly
+          const { mode: _mode, ...data } = msg
+          setCardData(data as ThaiIDData)
+        } else if (msg.mode === 'removedsmartcard') {
+          setCardData(null)
         }
       } catch (e) {
         console.error('Failed to parse message:', e)

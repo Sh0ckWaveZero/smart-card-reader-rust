@@ -20,12 +20,12 @@ pub const DEFAULT_PORT: u16 = 8182;
 /// Default window title
 pub const DEFAULT_WINDOW_TITLE: &str = "Thai Smart Card Reader";
 /// Default window dimensions (fixed size - cannot be resized)
-pub const DEFAULT_WINDOW_WIDTH: f32 = 900.0;
-pub const DEFAULT_WINDOW_HEIGHT: f32 = 620.0;
-pub const DEFAULT_MIN_WIDTH: f32 = 900.0;
-pub const DEFAULT_MIN_HEIGHT: f32 = 620.0;
-pub const DEFAULT_MAX_WIDTH: f32 = 900.0;
-pub const DEFAULT_MAX_HEIGHT: f32 = 620.0;
+pub const DEFAULT_WINDOW_WIDTH: f32 = 1100.0;
+pub const DEFAULT_WINDOW_HEIGHT: f32 = 750.0;
+pub const DEFAULT_MIN_WIDTH: f32 = 1100.0;
+pub const DEFAULT_MIN_HEIGHT: f32 = 750.0;
+pub const DEFAULT_MAX_WIDTH: f32 = 1100.0;
+pub const DEFAULT_MAX_HEIGHT: f32 = 750.0;
 /// Default log level
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 /// Environment variable for config path
@@ -407,7 +407,7 @@ impl Default for CardConfig {
                 },
                 ApduCommand {
                     name: "address".to_owned(),
-                    apdu: "80B01579020064".to_owned(),
+                    apdu: "80B015790200FF".to_owned(),
                     required: false,
                 },
             ],

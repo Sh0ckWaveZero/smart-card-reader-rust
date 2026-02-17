@@ -15,15 +15,29 @@ pub enum CardEvent {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ThaiIDData {
+    // --- Identity ---
     pub citizen_id: String,
-    pub full_name_th: String,
+    // --- Thai name components ---
+    pub th_prefix: String,
+    pub th_firstname: String,
+    pub th_middlename: String,
+    pub th_lastname: String,
+    // --- English name (full, from card) ---
     pub full_name_en: String,
-    pub date_of_birth: String,
-    pub gender: String,
+    // --- Date / Sex ---
+    pub birthday: String, // YYYYMMDD (Buddhist Era from card)
+    pub sex: String,      // "1" = male, other = female
+    // --- Card meta ---
     pub card_issuer: String,
     pub issue_date: String,
     pub expire_date: String,
-    pub address: String,
+    // --- Address components ---
+    pub address: String, // full combined address (raw from card)
+    pub addr_house_no: String,
+    pub addr_village_no: String,
+    pub addr_tambol: String,
+    pub addr_amphur: String,
+    // --- Photo ---
     pub photo: String, // Base64 encoded
 }
 
@@ -58,8 +72,18 @@ pub fn format_thai_date(date_str: &str) -> String {
     let day = &date_str[6..8];
 
     let thai_months = [
-        "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-        "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+        "ม.ค.",
+        "ก.พ.",
+        "มี.ค.",
+        "เม.ย.",
+        "พ.ค.",
+        "มิ.ย.",
+        "ก.ค.",
+        "ส.ค.",
+        "ก.ย.",
+        "ต.ค.",
+        "พ.ย.",
+        "ธ.ค.",
     ];
 
     let month_name = if month >= 1 && month <= 12 {
@@ -81,21 +105,28 @@ pub fn format_thai_date(date_str: &str) -> String {
 pub fn apply_output_config(data: &ThaiIDData, config: &OutputConfig) -> Value {
     let mut result = serde_json::Map::new();
 
-    // Define all available fields
-    let fields = [
-        ("citizen_id", &data.citizen_id),
-        ("full_name_th", &data.full_name_th),
+    // Define all available fields (internal_name, value)
+    let fields: &[(&str, &str)] = &[
+        ("Citizenid", &data.citizen_id),
+        ("Th_Prefix", &data.th_prefix),
+        ("Th_Firstname", &data.th_firstname),
+        ("Th_Middlename", &data.th_middlename),
+        ("Th_Lastname", &data.th_lastname),
         ("full_name_en", &data.full_name_en),
-        ("date_of_birth", &data.date_of_birth),
-        ("gender", &data.gender),
+        ("Birthday", &data.birthday),
+        ("Sex", &data.sex),
         ("card_issuer", &data.card_issuer),
         ("issue_date", &data.issue_date),
         ("expire_date", &data.expire_date),
-        ("address", &data.address),
+        ("Address", &data.address),
+        ("addrHouseNo", &data.addr_house_no),
+        ("addrVillageNo", &data.addr_village_no),
+        ("addrTambol", &data.addr_tambol),
+        ("addrAmphur", &data.addr_amphur),
     ];
 
     // Process each field
-    for (field_name, field_value) in fields {
+    for &(field_name, field_value) in fields {
         if config.is_field_enabled(field_name) {
             let output_name = config.get_field_name(field_name).to_owned();
             result.insert(output_name, json!(field_value));
@@ -103,8 +134,8 @@ pub fn apply_output_config(data: &ThaiIDData, config: &OutputConfig) -> Value {
     }
 
     // Handle photo separately (can be large)
-    if config.include_photo && config.is_field_enabled("photo") {
-        let output_name = config.get_field_name("photo").to_owned();
+    if config.include_photo && config.is_field_enabled("PhotoRaw") {
+        let output_name = config.get_field_name("PhotoRaw").to_owned();
         result.insert(output_name, json!(&data.photo));
     }
 

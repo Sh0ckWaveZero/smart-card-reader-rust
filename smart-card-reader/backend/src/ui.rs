@@ -29,10 +29,13 @@ struct T {
     no_photo: &'static str,
     card_info: &'static str,
     citizen_id: &'static str,
-    name_th: &'static str,
+    th_prefix: &'static str,
+    th_firstname: &'static str,
+    th_middlename: &'static str,
+    th_lastname: &'static str,
     name_en: &'static str,
-    dob: &'static str,
-    gender: &'static str,
+    birthday: &'static str,
+    sex: &'static str,
     card_issuer: &'static str,
     issue_date: &'static str,
     expire_date: &'static str,
@@ -53,10 +56,13 @@ const EN: T = T {
     no_photo: "No photo",
     card_info: "Card Information",
     citizen_id: "Citizen ID:",
-    name_th: "Name (TH):",
+    th_prefix: "Prefix (TH):",
+    th_firstname: "First Name (TH):",
+    th_middlename: "Middle Name (TH):",
+    th_lastname: "Last Name (TH):",
     name_en: "Name (EN):",
-    dob: "Date of Birth:",
-    gender: "Gender:",
+    birthday: "Date of Birth:",
+    sex: "Sex:",
     card_issuer: "Card Issuer:",
     issue_date: "Issue Date:",
     expire_date: "Expire Date:",
@@ -77,10 +83,13 @@ const TH: T = T {
     no_photo: "ไม่มีรูป",
     card_info: "ข้อมูลบัตร",
     citizen_id: "เลขบัตรประชาชน:",
-    name_th: "ชื่อ-นามสกุล (ไทย):",
+    th_prefix: "คำนำหน้า:",
+    th_firstname: "ชื่อ:",
+    th_middlename: "ชื่อกลาง:",
+    th_lastname: "นามสกุล:",
     name_en: "ชื่อ-นามสกุล (อังกฤษ):",
-    dob: "วันเกิด:",
-    gender: "เพศ:",
+    birthday: "วันเกิด:",
+    sex: "เพศ:",
     card_issuer: "หน่วยงานออกบัตร:",
     issue_date: "วันออกบัตร:",
     expire_date: "วันหมดอายุ:",
@@ -344,7 +353,13 @@ impl eframe::App for SmartCardApp {
         while let Ok(event) = self.rx.try_recv() {
             match event {
                 CardEvent::Inserted(data) => {
-                    self.add_log(&format!("Card read: {}", data.citizen_id));
+                    let id = &data.citizen_id;
+                    let masked = if id.len() > 4 {
+                        format!("{}{}", "*".repeat(id.len() - 4), &id[id.len() - 4..])
+                    } else {
+                        "*".repeat(id.len())
+                    };
+                    self.add_log(&format!("Card read: {}", masked));
                     self.last_read_time = Some(Local::now().format("%H:%M:%S").to_string());
 
                     // Load photo texture
@@ -461,137 +476,174 @@ impl eframe::App for SmartCardApp {
                 const PHOTO_W: f32 = 180.0;
                 const PHOTO_H: f32 = 240.0;
 
-                ui.horizontal(|ui| {
-                    // Left side - Photo
-                    ui.vertical(|ui| {
-                        ui.heading(tr.photo);
-                        if data_hidden {
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::vec2(PHOTO_W, PHOTO_H),
-                                egui::Sense::hover(),
-                            );
-                            ui.painter().rect_filled(
-                                rect,
-                                8.0,
-                                egui::Color32::from_rgb(40, 45, 60),
-                            );
-                            ui.painter().text(
-                                rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "🔒",
-                                egui::FontId::proportional(36.0),
-                                egui::Color32::from_rgb(100, 116, 139),
-                            );
-                        } else if let Some(texture) = &self.photo_texture {
-                            ui.add(
-                                egui::Image::new((texture.id(), egui::vec2(PHOTO_W, PHOTO_H)))
-                                    .fit_to_exact_size(egui::vec2(PHOTO_W, PHOTO_H)),
-                            );
-                        } else {
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::vec2(PHOTO_W, PHOTO_H),
-                                egui::Sense::hover(),
-                            );
-                            ui.painter().rect_filled(
-                                rect,
-                                8.0,
-                                egui::Color32::from_rgb(40, 45, 60),
-                            );
-                            ui.painter().text(
-                                rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                tr.no_photo,
-                                egui::FontId::proportional(14.0),
-                                egui::Color32::from_rgb(100, 116, 139),
-                            );
-                        }
-                    });
-
-                    ui.separator();
-
-                    // Right side - Card details
-                    ui.vertical(|ui| {
-                        ui.heading(tr.card_info);
-                        ui.add_space(10.0);
-
-                        egui::Grid::new("card_info_grid")
-                            .num_columns(2)
-                            .spacing([20.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label(egui::RichText::new(tr.citizen_id).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.citizen_id)
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.horizontal_top(|ui| {
+                            // Left side - Photo
+                            ui.vertical(|ui| {
+                                ui.heading(tr.photo);
+                                if data_hidden {
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        egui::vec2(PHOTO_W, PHOTO_H),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        8.0,
+                                        egui::Color32::from_rgb(40, 45, 60),
+                                    );
+                                    ui.painter().text(
+                                        rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        "🔒",
+                                        egui::FontId::proportional(36.0),
+                                        egui::Color32::from_rgb(100, 116, 139),
+                                    );
+                                } else if let Some(texture) = &self.photo_texture {
+                                    ui.add(
+                                        egui::Image::new((
+                                            texture.id(),
+                                            egui::vec2(PHOTO_W, PHOTO_H),
+                                        ))
+                                        .fit_to_exact_size(egui::vec2(PHOTO_W, PHOTO_H)),
+                                    );
                                 } else {
-                                    data.citizen_id.clone()
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.name_th).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.full_name_th)
-                                } else {
-                                    data.full_name_th.clone()
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.name_en).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.full_name_en)
-                                } else {
-                                    data.full_name_en.clone()
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.dob).strong());
-                                ui.label(if data_hidden {
-                                    mask("")
-                                } else {
-                                    format_thai_date(&data.date_of_birth)
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.gender).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.gender)
-                                } else {
-                                    data.gender.clone()
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.card_issuer).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.card_issuer)
-                                } else {
-                                    data.card_issuer.clone()
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.issue_date).strong());
-                                ui.label(if data_hidden {
-                                    mask("")
-                                } else {
-                                    format_thai_date(&data.issue_date)
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.expire_date).strong());
-                                ui.label(if data_hidden {
-                                    mask("")
-                                } else {
-                                    format_thai_date(&data.expire_date)
-                                });
-                                ui.end_row();
-
-                                ui.label(egui::RichText::new(tr.address).strong());
-                                ui.label(if data_hidden {
-                                    mask(&data.address)
-                                } else {
-                                    data.address.clone()
-                                });
-                                ui.end_row();
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        egui::vec2(PHOTO_W, PHOTO_H),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        8.0,
+                                        egui::Color32::from_rgb(40, 45, 60),
+                                    );
+                                    ui.painter().text(
+                                        rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        tr.no_photo,
+                                        egui::FontId::proportional(14.0),
+                                        egui::Color32::from_rgb(100, 116, 139),
+                                    );
+                                }
                             });
-                    });
-                });
+
+                            ui.separator();
+
+                            // Right side - Card details
+                            ui.vertical(|ui| {
+                                ui.heading(tr.card_info);
+                                ui.add_space(10.0);
+
+                                egui::Grid::new("card_info_grid")
+                                    .num_columns(2)
+                                    .spacing([20.0, 8.0])
+                                    .show(ui, |ui| {
+                                        // --- Identity ---
+                                        ui.label(egui::RichText::new(tr.citizen_id).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.citizen_id)
+                                        } else {
+                                            data.citizen_id.clone()
+                                        });
+                                        ui.end_row();
+
+                                        // --- Thai name components ---
+                                        ui.label(egui::RichText::new(tr.th_prefix).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.th_prefix)
+                                        } else {
+                                            data.th_prefix.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.th_firstname).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.th_firstname)
+                                        } else {
+                                            data.th_firstname.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.th_middlename).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.th_middlename)
+                                        } else {
+                                            data.th_middlename.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.th_lastname).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.th_lastname)
+                                        } else {
+                                            data.th_lastname.clone()
+                                        });
+                                        ui.end_row();
+
+                                        // --- English name ---
+                                        ui.label(egui::RichText::new(tr.name_en).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.full_name_en)
+                                        } else {
+                                            data.full_name_en.clone()
+                                        });
+                                        ui.end_row();
+
+                                        // --- Date / Sex ---
+                                        ui.label(egui::RichText::new(tr.birthday).strong());
+                                        ui.label(if data_hidden {
+                                            mask("")
+                                        } else {
+                                            format_thai_date(&data.birthday)
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.sex).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.sex)
+                                        } else {
+                                            data.sex.clone()
+                                        });
+                                        ui.end_row();
+
+                                        // --- Card meta ---
+                                        ui.label(egui::RichText::new(tr.card_issuer).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.card_issuer)
+                                        } else {
+                                            data.card_issuer.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.issue_date).strong());
+                                        ui.label(if data_hidden {
+                                            mask("")
+                                        } else {
+                                            format_thai_date(&data.issue_date)
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.expire_date).strong());
+                                        ui.label(if data_hidden {
+                                            mask("")
+                                        } else {
+                                            format_thai_date(&data.expire_date)
+                                        });
+                                        ui.end_row();
+
+                                        // --- Address (UI only shows combined address) ---
+                                        ui.label(egui::RichText::new(tr.address).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.address)
+                                        } else {
+                                            data.address.clone()
+                                        });
+                                        ui.end_row();
+                                    });
+                            });
+                        }); // horizontal_top
+                    }); // ScrollArea
             } else {
                 ui.centered_and_justified(|ui| {
                     ui.vertical_centered(|ui| {

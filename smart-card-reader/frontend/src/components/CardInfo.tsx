@@ -6,36 +6,39 @@ interface Props {
 }
 
 const MTH = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
-const MEN = ['', 'Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.']
 
 function dTh(r: string) {
   if (r.length !== 8) return r
   return `${parseInt(r.substring(6, 8))} ${MTH[parseInt(r.substring(4, 6))] || ''} ${r.substring(0, 4)}`
 }
-function dEn(r: string) {
-  if (r.length !== 8) return r
-  return `${parseInt(r.substring(6, 8))} ${MEN[parseInt(r.substring(4, 6))] || ''} ${parseInt(r.substring(0, 4)) - 543}`
-}
+
 function cid(id: string) {
   if (id.length !== 13) return id
   return `${id[0]}-${id.substring(1, 5)}-${id.substring(5, 10)}-${id.substring(10, 12)}-${id[12]}`
 }
 
+function sexLabel(s: string) {
+  return s === '1' ? 'ชาย' : s === '2' ? 'หญิง' : s || '-'
+}
+
 export function CardInfo({ data }: Props) {
-  const dobTh = dTh(data.date_of_birth)
-  const issueTh = dTh(data.issue_date)
+  const dobTh    = dTh(data.Birthday)
+  const issueTh  = dTh(data.issue_date)
   const expireTh = dTh(data.expire_date)
+
+  const fullNameTh = [data.Th_Prefix, data.Th_Firstname, data.Th_Middlename, data.Th_Lastname]
+    .filter(Boolean).join(' ')
 
   return (
     <div className="id-card">
       {/* Left Panel - Photo & ID */}
       <div className="id-left">
         <div className="id-photo-wrapper">
-          {data.photo ? (
-            <img 
-              className="id-photo" 
-              src={`data:image/jpeg;base64,${data.photo}`} 
-              alt="" 
+          {data.PhotoRaw ? (
+            <img
+              className="id-photo"
+              src={`data:image/jpeg;base64,${data.PhotoRaw}`}
+              alt=""
             />
           ) : (
             <div className="id-photo-placeholder">
@@ -47,16 +50,17 @@ export function CardInfo({ data }: Props) {
           )}
         </div>
         <div className="id-number">
-          {cid(data.citizen_id)}
+          {cid(data.Citizenid)}
         </div>
       </div>
 
-      {/* Right Panel - Information Fields */}
+      {/* Right Panel */}
       <div className="id-right">
-        {/* Thai Name */}
+
+        {/* Thai name (combined) */}
         <div className="id-field">
           <label>ชื่อ-นามสกุล (ภาษาไทย)</label>
-          <div className="id-value">{data.full_name_th || '-'}</div>
+          <div className="id-value">{fullNameTh || '-'}</div>
         </div>
 
         {/* English Name */}
@@ -65,7 +69,7 @@ export function CardInfo({ data }: Props) {
           <div className="id-value">{data.full_name_en || '-'}</div>
         </div>
 
-        {/* DOB & Gender Row */}
+        {/* DOB & Sex */}
         <div className="id-row">
           <div className="id-field half">
             <label>วันเกิด</label>
@@ -73,11 +77,34 @@ export function CardInfo({ data }: Props) {
           </div>
           <div className="id-field half">
             <label>เพศ</label>
-            <div className="id-value">{data.gender === '1' ? 'ชาย' : data.gender === '2' ? 'หญิง' : '-'}</div>
+            <div className="id-value">{sexLabel(data.Sex)}</div>
           </div>
         </div>
 
-        {/* Issue & Expiry Row */}
+        {/* Address components */}
+        <div className="id-row">
+          <div className="id-field half">
+            <label>เลขที่</label>
+            <div className="id-value">{data.addrHouseNo || '-'}</div>
+          </div>
+          <div className="id-field half">
+            <label>หมู่ที่</label>
+            <div className="id-value">{data.addrVillageNo || '-'}</div>
+          </div>
+        </div>
+
+        <div className="id-row">
+          <div className="id-field half">
+            <label>ตำบล/แขวง</label>
+            <div className="id-value">{data.addrTambol || '-'}</div>
+          </div>
+          <div className="id-field half">
+            <label>อำเภอ/เขต</label>
+            <div className="id-value">{data.addrAmphur || '-'}</div>
+          </div>
+        </div>
+
+        {/* Issue & Expiry */}
         <div className="id-row">
           <div className="id-field half">
             <label>วันออกบัตร</label>
@@ -89,17 +116,6 @@ export function CardInfo({ data }: Props) {
           </div>
         </div>
 
-        {/* Address */}
-        <div className="id-field">
-          <label>ที่อยู่</label>
-          <div className="id-value">{data.address || '-'}</div>
-        </div>
-
-        {/* Issuer */}
-        <div className="id-field">
-          <label>หน่วยงานผู้ออกบัตร</label>
-          <div className="id-value">{data.card_issuer || '-'}</div>
-        </div>
       </div>
     </div>
   )

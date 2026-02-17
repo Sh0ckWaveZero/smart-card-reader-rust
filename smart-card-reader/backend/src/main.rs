@@ -76,13 +76,18 @@ fn main() {
                     let msg = match &event {
                         decoder::CardEvent::Inserted(data) => {
                             let mapped_data = decoder::apply_output_config(data, &output_config_clone);
-                            json!({
-                                "type": "CARD_INSERTED",
-                                "data": mapped_data
-                            })
+                            // Flatten mapped_data into the top-level object alongside "mode"
+                            let mut obj = serde_json::Map::new();
+                            obj.insert("mode".to_string(), json!("readsmartcard"));
+                            if let serde_json::Value::Object(fields) = mapped_data {
+                                for (k, v) in fields {
+                                    obj.insert(k, v);
+                                }
+                            }
+                            serde_json::Value::Object(obj)
                         }
                         decoder::CardEvent::Removed => json!({
-                            "type": "CARD_REMOVED"
+                            "mode": "removedsmartcard"
                         }),
                     }
                     .to_string();

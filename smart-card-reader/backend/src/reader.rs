@@ -163,16 +163,115 @@ impl CardReader {
             }
         };
 
+        // Helper: read raw bytes without stripping '#' delimiters
+        let read_field_raw = |name: &str| -> Result<Vec<u8>> {
+            if let Some(field) = self.config.get_field(name) {
+                let apdu = field.to_bytes();
+                let data = self.send_apdu(card, &apdu)?;
+                Ok(data)
+            } else {
+                Ok(Vec::new())
+            }
+        };
+
+        // Helper: split TIS-620 bytes by '#' into up to `n` parts
+        let split_tis620 = |bytes: Vec<u8>, n: usize| -> Vec<String> {
+            use encoding_rs::WINDOWS_874;
+            use unicode_normalization::UnicodeNormalization;
+            let (cow, _, _) = WINDOWS_874.decode(&bytes);
+            let raw = cow.into_owned();
+            let mut parts: Vec<String> = raw
+                .splitn(n, '#')
+                .map(|s| s.split_whitespace().collect::<Vec<&str>>().join(" ").nfc().collect())
+                .collect();
+            while parts.len() < n {
+                parts.push(String::new());
+            }
+            parts
+        };
+
         // Read all configured fields
-        let citizen_id = read_field("citizen_id")?;
-        let full_name_th = read_field("full_name_th")?;
-        let full_name_en = read_field("full_name_en")?;
+        let citizen_id   = read_field("citizen_id")?;
         let date_of_birth = read_field("date_of_birth")?;
-        let gender = read_field("gender")?;
-        let card_issuer = read_field("card_issuer").unwrap_or_default();
-        let issue_date = read_field("issue_date")?;
-        let expire_date = read_field("expire_date")?;
-        let address = read_field("address").unwrap_or_default();
+        let sex           = read_field("gender")?;
+        let card_issuer   = read_field("card_issuer").unwrap_or_default();
+        let issue_date    = read_field("issue_date")?;
+        let expire_date   = read_field("expire_date")?;
+        let full_name_en  = read_field("full_name_en")?;
+
+        // Thai name: "คำนำหน้า#ชื่อ#ชื่อกลาง#นามสกุล"
+        let name_th_raw = read_field_raw("full_name_th")?;
+        let name_parts = split_tis620(name_th_raw, 4);
+        let th_prefix     = name_parts[0].clone();
+        let th_firstname  = name_parts[1].clone();
+        let th_middlename = name_parts[2].clone();
+        let th_lastname   = name_parts[3].clone();
+
+        // Address on Thai ID card
+        // Thai ID card address format: [#]เลขที่#หมู่ที่#ตำบล#อำเภอ#จังหวัด#...
+        // We take the raw bytes, decode TIS-620, split by '#', take first 6 parts max,
+        // and keep only parts that contain at least one Thai or ASCII printable character
+        // (filtering out garbage binary padding that may appear after the real data).
+        // Address on Thai ID card: เลขที่#หมู่ที่###ตำบล#อำเภอ#จังหวัด[garbage]
+        // Split by '#', strip garbage from each part (keep only Thai + basic ASCII),
+        // then filter out empty parts → gives clean ordered list.
+        let addr_raw = read_field_raw("address")?;
+
+        // Thai ID card stores address as TIS-620 bytes separated by '#' (0x23).
+        // Valid TIS-620 address bytes: 0x20-0x7E (ASCII printable) and 0xA1-0xFB (Thai).
+        // Garbage padding at end of field uses bytes outside these ranges (e.g. 0x00, 0x80-0x9F, 0xFC+).
+        // Truncate at the first invalid byte to strip garbage BEFORE decoding.
+        let addr_raw_clean: Vec<u8> = addr_raw.iter()
+            .copied()
+            .take_while(|&b| {
+                b == 0x23           // '#' delimiter
+                || (b >= 0x20 && b <= 0x7E)   // ASCII printable
+                || (b >= 0xA1 && b <= 0xFB)   // TIS-620 Thai range
+            })
+            .collect();
+
+        // Split by '#', filter empty parts, NFC-normalize
+        let addr_meaningful_parts: Vec<String> = {
+            use encoding_rs::WINDOWS_874;
+            use unicode_normalization::UnicodeNormalization;
+            let (cow, _, _) = WINDOWS_874.decode(&addr_raw_clean);
+            cow.split('#')
+                .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ").nfc().collect::<String>())
+                .filter(|s| !s.is_empty())
+                .collect()
+        };
+        info!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
+
+        // Strip any trailing non-Thai-letter content from a part
+        // (Thai letters: U+0E01-U+0E2E, U+0E30-U+0E3A, U+0E40-U+0E45, U+0E47-U+0E4E)
+        // Thai digits U+0E50-U+0E59 and punctuation are excluded — they indicate garbage
+        let strip_garbage = |s: &str| -> String {
+            // Keep only Thai consonants/vowels/tone-marks and space
+            let clean: String = s.chars()
+                .filter(|&c| {
+                    (c >= '\u{0E01}' && c <= '\u{0E2E}')   // Thai consonants
+                    || (c >= '\u{0E30}' && c <= '\u{0E3A}')// Thai vowels/sara
+                    || (c >= '\u{0E40}' && c <= '\u{0E4E}')// Thai vowels/tone marks
+                    || c == ' '
+                })
+                .collect();
+            clean.split_whitespace().collect::<Vec<_>>().join(" ")
+        };
+
+        let addr_house_no   = addr_meaningful_parts.get(0).cloned().unwrap_or_default();
+        let addr_village_no = addr_meaningful_parts.get(1).cloned().unwrap_or_default();
+        let addr_tambol     = addr_meaningful_parts.get(2).map(|s| strip_garbage(s)).unwrap_or_default();
+        let addr_amphur     = addr_meaningful_parts.get(3).map(|s| strip_garbage(s)).unwrap_or_default();
+        let addr_province   = addr_meaningful_parts.get(4).map(|s| strip_garbage(s)).unwrap_or_default();
+        info!("→ house={:?} village={:?} tambol={:?} amphur={:?} province={:?}",
+            addr_house_no, addr_village_no, addr_tambol, addr_amphur, addr_province);
+        // Full address: house + village + tambol + amphur + province
+        let address = [&addr_house_no, &addr_village_no, &addr_tambol, &addr_amphur, &addr_province]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
 
         // Read Photo using configured chunk APDUs
         let mut photo_chunks = Vec::new();
@@ -196,22 +295,38 @@ impl CardReader {
         );
         let photo = decoder::combine_photo_chunks(photo_chunks);
 
+        // Convert date from YYYYMMDD → YYYY/MM/DD (required by HIS moment() parsing)
+        let format_date_slash = |d: &str| -> String {
+            if d.len() == 8 {
+                format!("{}/{}/{}", &d[0..4], &d[4..6], &d[6..8])
+            } else {
+                d.to_string()
+            }
+        };
+
         Ok(decoder::ThaiIDData {
             citizen_id,
-            full_name_th,
+            th_prefix,
+            th_firstname,
+            th_middlename,
+            th_lastname,
             full_name_en,
-            date_of_birth,
-            gender,
+            birthday: format_date_slash(&date_of_birth),
+            sex,
             card_issuer,
-            issue_date,
-            expire_date,
+            issue_date: format_date_slash(&issue_date),
+            expire_date: format_date_slash(&expire_date),
             address,
+            addr_house_no,
+            addr_village_no,
+            addr_tambol,
+            addr_amphur,
             photo,
         })
     }
 
     fn send_apdu(&self, card: &Card, apdu: &[u8]) -> Result<Vec<u8>> {
-        let mut rapdu_buf = [0u8; 258]; // max 256 data + 2 SW bytes
+        let mut rapdu_buf = [0u8; 514]; // 512 data + 2 SW bytes
         let rapdu = card.transmit(apdu, &mut rapdu_buf)?;
 
         if rapdu.len() < 2 {

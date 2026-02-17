@@ -1,17 +1,23 @@
 export interface ThaiIDData {
-  citizen_id: string
-  full_name_th: string
+  Citizenid: string
+  Th_Prefix: string
+  Th_Firstname: string
+  Th_Middlename: string
+  Th_Lastname: string
   full_name_en: string
-  date_of_birth: string
-  gender: string
+  Birthday: string       // YYYYMMDD Buddhist Era
+  Sex: string            // "1" = male, other = female
   card_issuer: string
   issue_date: string
   expire_date: string
-  address: string
-  photo: string // Base64 encoded
+  Address: string
+  addrHouseNo: string
+  addrVillageNo: string
+  addrTambol: string
+  addrAmphur: string
+  PhotoRaw: string       // Base64 encoded
 }
 
-export interface CardEvent {
-  type: 'CARD_INSERTED'
-  data: ThaiIDData
+export interface CardEvent extends ThaiIDData {
+  mode: 'readsmartcard' | 'removedsmartcard'
 }
