@@ -240,7 +240,7 @@ impl CardReader {
                 .filter(|s| !s.is_empty())
                 .collect()
         };
-        info!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
+        debug!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
 
         // Strip any trailing non-Thai-letter content from a part
         // (Thai letters: U+0E01-U+0E2E, U+0E30-U+0E3A, U+0E40-U+0E45, U+0E47-U+0E4E)
@@ -263,8 +263,7 @@ impl CardReader {
         let addr_tambol     = addr_meaningful_parts.get(2).map(|s| strip_garbage(s)).unwrap_or_default();
         let addr_amphur     = addr_meaningful_parts.get(3).map(|s| strip_garbage(s)).unwrap_or_default();
         let addr_province   = addr_meaningful_parts.get(4).map(|s| strip_garbage(s)).unwrap_or_default();
-        info!("→ house={:?} village={:?} tambol={:?} amphur={:?} province={:?}",
-            addr_house_no, addr_village_no, addr_tambol, addr_amphur, addr_province);
+        info!("Address: {}", decoder::mask_address(&addr_province));
         // Full address: house + village + tambol + amphur + province
         let address = [&addr_house_no, &addr_village_no, &addr_tambol, &addr_amphur, &addr_province]
             .iter()

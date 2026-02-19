@@ -71,6 +71,16 @@ pub fn mask_citizen_id(citizen_id: &str) -> String {
     }
 }
 
+/// Mask address for logging - only show province to prevent location identification
+/// Example: "99 หมู่ที่ 4 ตำบลบางรัก อำเภอเมือง จังหวัดกรุงเทพมหานคร" → "[hidden] จังหวัดกรุงเทพมหานคร"
+pub fn mask_address(province: &str) -> String {
+    if province.is_empty() {
+        "[masked address]".to_string()
+    } else {
+        format!("[hidden] {}", province)
+    }
+}
+
 /// Format date from YYYYMMDD to "DD MMM YYYY" in Buddhist Era (พ.ศ.)
 /// Input is already in Buddhist Era from the card
 pub fn format_thai_date(date_str: &str) -> String {
