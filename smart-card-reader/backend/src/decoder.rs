@@ -60,6 +60,17 @@ pub fn combine_photo_chunks(chunks: Vec<Vec<u8>>) -> String {
     base64::engine::general_purpose::STANDARD.encode(&full_data)
 }
 
+/// Mask citizen ID for logging - shows only last 4 digits with asterisks
+/// Example: "3100600123456" → "****0123456"
+pub fn mask_citizen_id(citizen_id: &str) -> String {
+    if citizen_id.len() <= 4 {
+        "*".repeat(citizen_id.len())
+    } else {
+        let last_4 = &citizen_id[citizen_id.len() - 4..];
+        format!("{}*{}", "*".repeat(citizen_id.len() - 4), last_4)
+    }
+}
+
 /// Format date from YYYYMMDD to "DD MMM YYYY" in Buddhist Era (พ.ศ.)
 /// Input is already in Buddhist Era from the card
 pub fn format_thai_date(date_str: &str) -> String {

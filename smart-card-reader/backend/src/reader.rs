@@ -109,7 +109,7 @@ impl CardReader {
                                 info!("Card connected in reader: {} (attempt {})", name, attempt);
                                 match self.read_thai_id(&card) {
                                     Ok(data) => {
-                                        info!("Read Thai ID: {}", data.citizen_id);
+                                        info!("Read Thai ID: {}", decoder::mask_citizen_id(&data.citizen_id));
                                         on_card_event(decoder::CardEvent::Inserted(data));
                                     }
                                     Err(e) => error!("Failed to read card: {}", e),
