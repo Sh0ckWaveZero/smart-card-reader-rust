@@ -351,8 +351,10 @@ pub struct CardConfig {
     pub retry_attempts: u8,
     /// Delay between retries in milliseconds
     pub retry_delay_ms: u64,
-    /// Delay after card insertion before reading (ms)
+    /// Delay after card insertion before reading (ms) - allows card to stabilize
     pub card_settle_delay_ms: u64,
+    /// Delay between consecutive APDU commands (ms) - for cards that need processing time
+    pub inter_command_delay_ms: u64,
 }
 
 fn default_true() -> bool {
@@ -434,8 +436,9 @@ impl Default for CardConfig {
                 "80B014680200FF".to_owned(),
             ],
             retry_attempts: 3,
-            retry_delay_ms: 500,
-            card_settle_delay_ms: 500,
+            retry_delay_ms: 1000,
+            card_settle_delay_ms: 1500,  // Increased from 500ms - more time for card to stabilize
+            inter_command_delay_ms: 100,  // Add delay between APDU commands for reliability
         }
     }
 }

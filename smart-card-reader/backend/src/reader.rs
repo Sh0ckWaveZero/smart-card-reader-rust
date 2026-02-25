@@ -148,14 +148,14 @@ impl CardReader {
         // SELECT Thai ID Applet from config
         let select_apdu = self.config.select_apdu_bytes();
         debug!("SELECT APDU: {:02X?}", select_apdu);
-        self.send_apdu(card, &select_apdu)?;
+        self.send_apdu_with_delay(card, &select_apdu)?;
 
         // Helper to read field by name from config
         let read_field = |name: &str| -> Result<String> {
             if let Some(field) = self.config.get_field(name) {
                 let apdu = field.to_bytes();
                 debug!("Reading {}: APDU {:02X?}", name, apdu);
-                let data = self.send_apdu(card, &apdu)?;
+                let data = self.send_apdu_with_delay(card, &apdu)?;
                 Ok(decoder::decode_tis620(&data))
             } else {
                 warn!("Field '{}' not found in config, using empty string", name);
@@ -167,7 +167,7 @@ impl CardReader {
         let read_field_raw = |name: &str| -> Result<Vec<u8>> {
             if let Some(field) = self.config.get_field(name) {
                 let apdu = field.to_bytes();
-                let data = self.send_apdu(card, &apdu)?;
+                let data = self.send_apdu_with_delay(card, &apdu)?;
                 Ok(data)
             } else {
                 Ok(Vec::new())
@@ -277,7 +277,7 @@ impl CardReader {
         let photo_apdus = self.config.photo_chunk_bytes();
 
         for (i, apdu) in photo_apdus.iter().enumerate() {
-            match self.send_apdu(card, apdu) {
+            match self.send_apdu_with_delay(card, apdu) {
                 Ok(data) => {
                     debug!("Photo chunk {}: {} bytes", i + 1, data.len());
                     photo_chunks.push(data);
@@ -324,6 +324,12 @@ impl CardReader {
         })
     }
 
+    fn send_apdu_with_delay(&self, card: &Card, apdu: &[u8]) -> Result<Vec<u8>> {
+        // Add delay for card processing time between commands
+        std::thread::sleep(std::time::Duration::from_millis(self.config.inter_command_delay_ms));
+        self.send_apdu(card, apdu)
+    }
+
     fn send_apdu(&self, card: &Card, apdu: &[u8]) -> Result<Vec<u8>> {
         let mut rapdu_buf = [0u8; 514]; // 512 data + 2 SW bytes
         let rapdu = card.transmit(apdu, &mut rapdu_buf)?;
@@ -344,6 +350,8 @@ impl CardReader {
             }
             let mut remaining = sw2;
             loop {
+                // Add delay before GET RESPONSE for card processing
+                std::thread::sleep(std::time::Duration::from_millis(self.config.inter_command_delay_ms));
                 let get_response_cmd = [0x00, 0xC0, 0x00, 0x00, remaining];
                 let resp = card.transmit(&get_response_cmd, &mut rapdu_buf)?;
                 if resp.len() < 2 {
