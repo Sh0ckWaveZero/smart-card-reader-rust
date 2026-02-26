@@ -24,6 +24,22 @@ impl CardReader {
         }
     }
 
+    /// Check if PCSC context is healthy by attempting to list readers
+    fn is_context_healthy(&self) -> bool {
+        if let Some(ctx) = &self.ctx {
+            let mut readers_buf = [0; 2048];
+            match ctx.list_readers(&mut readers_buf) {
+                Ok(_) => true,
+                Err(e) => {
+                    debug!("Context health check failed: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
     pub async fn run_monitor<F>(&mut self, on_card_event: F)
     where F: Fn(decoder::CardEvent) + Send + Sync + 'static + Clone
     {
@@ -31,14 +47,21 @@ impl CardReader {
         let mut card_present: HashSet<String> = HashSet::new();
 
         loop {
-            // Establish context if needed
-            if self.ctx.is_none() {
+            // Check context health and re-establish if needed
+            if !self.is_context_healthy() {
+                if self.ctx.is_some() {
+                    warn!("PCSC Context unhealthy, resetting...");
+                    self.ctx = None;
+                    card_present.clear();
+                }
+
                 match Context::establish(Scope::User) {
                     Ok(ctx) => {
                         info!("PCSC Context established.");
                         self.ctx = Some(ctx);
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        debug!("Failed to establish context: {}, retrying...", e);
                         sleep(Duration::from_secs(2)).await;
                         continue;
                     }
@@ -99,7 +122,7 @@ impl CardReader {
                     let retry_delay = Duration::from_millis(self.config.retry_delay_ms);
                     let settle_delay = Duration::from_millis(self.config.card_settle_delay_ms);
 
-                    let mut connected = false;
+                    let mut read_success = false;
                     for attempt in 1..=retry_attempts {
                         // Wait for card to settle after insertion
                         sleep(settle_delay).await;
@@ -107,15 +130,29 @@ impl CardReader {
                         match ctx.connect(rs.name(), ShareMode::Shared, Protocols::ANY) {
                             Ok(card) => {
                                 info!("Card connected in reader: {} (attempt {})", name, attempt);
-                                match self.read_thai_id(&card) {
-                                    Ok(data) => {
-                                        info!("Read Thai ID: {}", decoder::mask_citizen_id(&data.citizen_id));
-                                        on_card_event(decoder::CardEvent::Inserted(data));
+
+                                // Retry read operation up to 3 times
+                                for read_attempt in 1..=3 {
+                                    match self.read_thai_id(&card) {
+                                        Ok(data) => {
+                                            info!("Successfully read Thai ID: {} (read attempt {}/3)",
+                                                decoder::mask_citizen_id(&data.citizen_id), read_attempt);
+                                            on_card_event(decoder::CardEvent::Inserted(data));
+                                            read_success = true;
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to read card data (read attempt {}/3): {}", read_attempt, e);
+                                            if read_attempt < 3 {
+                                                sleep(Duration::from_millis(300)).await;
+                                            }
+                                        }
                                     }
-                                    Err(e) => error!("Failed to read card: {}", e),
                                 }
-                                connected = true;
-                                break;
+
+                                if read_success {
+                                    break;
+                                }
                             }
                             Err(e) => {
                                 warn!("Failed to connect to card (attempt {}/{}): {}", attempt, retry_attempts, e);
@@ -126,11 +163,11 @@ impl CardReader {
                         }
                     }
 
-                    // Mark as present regardless to avoid retry spam
-                    card_present.insert(name);
-
-                    if !connected {
-                        error!("Failed to connect after 3 attempts, will retry on re-insert");
+                    // Only mark as present if read was successful
+                    if read_success {
+                        card_present.insert(name);
+                    } else {
+                        error!("Failed to read card after {} connection attempts with 3 read retries each. Will retry on next poll cycle.", retry_attempts);
                     }
                 } else if !is_present && card_present.contains(&name) {
                     // Card removed — allow re-read on next insert
@@ -148,14 +185,16 @@ impl CardReader {
         // SELECT Thai ID Applet from config
         let select_apdu = self.config.select_apdu_bytes();
         debug!("SELECT APDU: {:02X?}", select_apdu);
-        self.send_apdu(card, &select_apdu)?;
+        self.send_apdu(card, &select_apdu)
+            .map_err(|e| anyhow!("Failed to SELECT Thai ID applet: {}", e))?;
 
         // Helper to read field by name from config
         let read_field = |name: &str| -> Result<String> {
             if let Some(field) = self.config.get_field(name) {
                 let apdu = field.to_bytes();
                 debug!("Reading {}: APDU {:02X?}", name, apdu);
-                let data = self.send_apdu(card, &apdu)?;
+                let data = self.send_apdu(card, &apdu)
+                    .map_err(|e| anyhow!("Failed to read field '{}': {}", name, e))?;
                 Ok(decoder::decode_tis620(&data))
             } else {
                 warn!("Field '{}' not found in config, using empty string", name);
@@ -167,7 +206,8 @@ impl CardReader {
         let read_field_raw = |name: &str| -> Result<Vec<u8>> {
             if let Some(field) = self.config.get_field(name) {
                 let apdu = field.to_bytes();
-                let data = self.send_apdu(card, &apdu)?;
+                let data = self.send_apdu(card, &apdu)
+                    .map_err(|e| anyhow!("Failed to read raw field '{}': {}", name, e))?;
                 Ok(data)
             } else {
                 Ok(Vec::new())
@@ -275,23 +315,28 @@ impl CardReader {
         // Read Photo using configured chunk APDUs
         let mut photo_chunks = Vec::new();
         let photo_apdus = self.config.photo_chunk_bytes();
+        let total_chunks = photo_apdus.len();
 
         for (i, apdu) in photo_apdus.iter().enumerate() {
             match self.send_apdu(card, apdu) {
                 Ok(data) => {
-                    debug!("Photo chunk {}: {} bytes", i + 1, data.len());
+                    debug!("Photo chunk {}/{}: {} bytes", i + 1, total_chunks, data.len());
                     photo_chunks.push(data);
                 }
                 Err(e) => {
-                    warn!("Failed to read photo chunk {}: {}", i + 1, e);
+                    warn!("Failed to read photo chunk {}/{}: {}", i + 1, total_chunks, e);
                 }
             }
         }
 
-        info!("Total photo chunks read: {}, total bytes: {}",
-            photo_chunks.len(),
-            photo_chunks.iter().map(|c| c.len()).sum::<usize>()
-        );
+        let total_bytes: usize = photo_chunks.iter().map(|c| c.len()).sum();
+        if photo_chunks.len() < total_chunks {
+            warn!("Photo incomplete: read {}/{} chunks ({} bytes)",
+                photo_chunks.len(), total_chunks, total_bytes);
+        } else {
+            info!("Photo complete: {}/{} chunks ({} bytes)",
+                photo_chunks.len(), total_chunks, total_bytes);
+        }
         let photo = decoder::combine_photo_chunks(photo_chunks);
 
         // Convert date from YYYYMMDD → YYYY/MM/DD (required by HIS moment() parsing)
@@ -326,10 +371,11 @@ impl CardReader {
 
     fn send_apdu(&self, card: &Card, apdu: &[u8]) -> Result<Vec<u8>> {
         let mut rapdu_buf = [0u8; 514]; // 512 data + 2 SW bytes
-        let rapdu = card.transmit(apdu, &mut rapdu_buf)?;
+        let rapdu = card.transmit(apdu, &mut rapdu_buf)
+            .map_err(|e| anyhow!("Card transmit failed: {}", e))?;
 
         if rapdu.len() < 2 {
-            return Err(anyhow!("Invalid APDU response length"));
+            return Err(anyhow!("Invalid APDU response length: {} bytes (expected >= 2)", rapdu.len()));
         }
 
         let sw1 = rapdu[rapdu.len() - 2];
@@ -359,14 +405,55 @@ impl CardReader {
                 } else if rsw1 == 0x90 && rsw2 == 0x00 {
                     break;
                 } else {
-                    return Err(anyhow!("GET RESPONSE failed: {:02X} {:02X}", rsw1, rsw2));
+                    return Err(anyhow!("GET RESPONSE failed with status: SW1={:02X} SW2={:02X} ({})",
+                        rsw1, rsw2, Self::interpret_sw(rsw1, rsw2)));
                 }
             }
             Ok(result)
         } else if sw1 == 0x90 && sw2 == 0x00 {
             Ok(rapdu[..rapdu.len() - 2].to_vec())
         } else {
-            Err(anyhow!("APDU Failed: {:02X} {:02X}", sw1, sw2))
+            Err(anyhow!("APDU failed with status: SW1={:02X} SW2={:02X} ({})",
+                sw1, sw2, Self::interpret_sw(sw1, sw2)))
+        }
+    }
+
+    /// Interpret ISO 7816-4 status words for better error messages
+    fn interpret_sw(sw1: u8, sw2: u8) -> &'static str {
+        match (sw1, sw2) {
+            (0x90, 0x00) => "Success",
+            (0x61, _) => "More data available",
+            (0x62, 0x00) => "No information given",
+            (0x62, 0x81) => "Part of returned data may be corrupted",
+            (0x62, 0x82) => "End of file reached before reading",
+            (0x63, 0x00) => "Verification failed",
+            (0x63, 0xC0..=0xCF) => "Counter verification",
+            (0x64, 0x00) => "State of non-volatile memory unchanged",
+            (0x65, 0x00) => "State of non-volatile memory changed",
+            (0x65, 0x81) => "Memory failure",
+            (0x66, 0x00) => "Security-related issue",
+            (0x67, 0x00) => "Wrong length",
+            (0x68, 0x00) => "Functions in CLA not supported",
+            (0x68, 0x81) => "Logical channel not supported",
+            (0x68, 0x82) => "Secure messaging not supported",
+            (0x69, 0x82) => "Security status not satisfied",
+            (0x69, 0x83) => "Authentication method blocked",
+            (0x69, 0x84) => "Referenced data invalidated",
+            (0x69, 0x85) => "Conditions of use not satisfied",
+            (0x69, 0x86) => "Command not allowed (no EF selected)",
+            (0x6A, 0x80) => "Incorrect parameters in command data field",
+            (0x6A, 0x81) => "Function not supported",
+            (0x6A, 0x82) => "File not found",
+            (0x6A, 0x83) => "Record not found",
+            (0x6A, 0x84) => "Not enough memory space",
+            (0x6A, 0x86) => "Incorrect parameters P1-P2",
+            (0x6A, 0x88) => "Referenced data not found",
+            (0x6B, 0x00) => "Wrong parameters P1-P2",
+            (0x6C, _) => "Wrong Le field",
+            (0x6D, 0x00) => "Instruction code not supported",
+            (0x6E, 0x00) => "Class not supported",
+            (0x6F, 0x00) => "No precise diagnosis",
+            _ => "Unknown error"
         }
     }
 }
