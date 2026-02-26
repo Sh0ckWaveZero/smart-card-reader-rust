@@ -44,9 +44,6 @@ pub enum ConfigError {
     Io(io::Error),
     /// Failed to parse TOML
     Parse(toml::de::Error),
-    /// Invalid configuration value (reserved for future validation)
-    #[allow(dead_code)]
-    Validation(String),
 }
 
 impl fmt::Display for ConfigError {
@@ -54,7 +51,6 @@ impl fmt::Display for ConfigError {
         match self {
             Self::Io(e) => write!(f, "Failed to read config: {e}"),
             Self::Parse(e) => write!(f, "Failed to parse config: {e}"),
-            Self::Validation(msg) => write!(f, "Invalid config: {msg}"),
         }
     }
 }
@@ -64,7 +60,6 @@ impl std::error::Error for ConfigError {
         match self {
             Self::Io(e) => Some(e),
             Self::Parse(e) => Some(e),
-            Self::Validation(_) => None,
         }
     }
 }
@@ -123,6 +118,10 @@ impl fmt::Display for OutputFormat {
 /// [output]
 /// format = "standard"
 /// include_photo = true
+///
+/// [security]
+/// enable_authentication = true
+/// api_keys = ["your-secret-key-here"]
 /// ```
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -140,6 +139,8 @@ pub struct AppConfig {
     pub logging: LoggingConfig,
     /// Card reading configuration
     pub card: CardConfig,
+    /// Security configuration
+    pub security: SecurityConfig,
 }
 
 impl Default for AppConfig {
@@ -151,6 +152,7 @@ impl Default for AppConfig {
             fonts: FontConfig::default(),
             logging: LoggingConfig::default(),
             card: CardConfig::default(),
+            security: SecurityConfig::default(),
         }
     }
 }
@@ -164,8 +166,17 @@ pub struct ServerConfig {
     pub host: IpAddr,
     /// Server port number
     pub port: u16,
-    /// Allow all CORS origins
+    /// Allow all CORS origins (⚠️ INSECURE: Set to false in production)
     pub cors_allow_all: bool,
+    /// Allowed CORS origins (used when cors_allow_all = false)
+    /// Example: ["https://your-app.com", "https://localhost:3000"]
+    pub allowed_origins: Vec<String>,
+    /// Enable TLS/SSL for secure WebSocket (wss://)
+    pub enable_tls: bool,
+    /// Path to TLS certificate file (.pem or .crt)
+    pub tls_cert_path: String,
+    /// Path to TLS private key file (.pem or .key)
+    pub tls_key_path: String,
 }
 
 impl Default for ServerConfig {
@@ -174,6 +185,13 @@ impl Default for ServerConfig {
             host: DEFAULT_HOST,
             port: DEFAULT_PORT,
             cors_allow_all: true,
+            allowed_origins: vec![
+                "http://localhost:3000".to_string(),
+                "https://localhost:3000".to_string(),
+            ],
+            enable_tls: false,
+            tls_cert_path: "certs/cert.pem".to_string(),
+            tls_key_path: "certs/key.pem".to_string(),
         }
     }
 }
@@ -182,13 +200,40 @@ impl ServerConfig {
     /// Returns the WebSocket URL for client connections
     #[must_use]
     pub fn websocket_url(&self) -> String {
-        format!("ws://{}:{}", self.host, self.port)
+        let protocol = if self.enable_tls { "wss" } else { "ws" };
+        format!("{}://{}:{}", protocol, self.host, self.port)
     }
 
     /// Returns the socket address for binding
     #[must_use]
     pub fn socket_addr(&self) -> std::net::SocketAddr {
         std::net::SocketAddr::new(self.host, self.port)
+    }
+
+    /// Get allowed CORS origins from config or environment variable
+    ///
+    /// Priority: config.toml > ALLOWED_ORIGINS env var > empty
+    ///
+    /// # Environment Variable Format
+    /// Comma-separated list: `ALLOWED_ORIGINS=http://localhost:3000,https://app.com`
+    #[must_use]
+    pub fn get_allowed_origins(&self) -> Vec<String> {
+        // Use config value if present
+        if !self.allowed_origins.is_empty() {
+            return self.allowed_origins.clone();
+        }
+
+        // Try to read from environment variable
+        if let Ok(origins_str) = std::env::var("ALLOWED_ORIGINS") {
+            return origins_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+
+        // No origins configured
+        Vec::new()
     }
 }
 
@@ -309,6 +354,112 @@ impl Default for LoggingConfig {
         Self {
             level: DEFAULT_LOG_LEVEL.to_owned(),
         }
+    }
+}
+
+/// Security configuration
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SecurityConfig {
+    /// Enable API key authentication for WebSocket connections
+    pub enable_authentication: bool,
+    /// List of valid API keys (read from environment variable API_KEYS if empty)
+    pub api_keys: Vec<String>,
+    /// API key header name
+    pub api_key_header: String,
+    /// Enable PII data encryption before transmission
+    pub enable_encryption: bool,
+    /// List of field names to encrypt (empty = encrypt all sensitive fields)
+    /// Common sensitive fields: Citizenid, Th_Firstname, Th_Lastname, full_name_en, Address
+    pub encrypted_fields: Vec<String>,
+    /// Enable rate limiting for WebSocket connections
+    pub enable_rate_limiting: bool,
+    /// Maximum requests per time window (per IP)
+    pub rate_limit_requests: u32,
+    /// Time window in seconds for rate limiting
+    pub rate_limit_window_secs: u64,
+    /// Maximum concurrent connections per IP
+    pub rate_limit_max_connections: u32,
+    /// Enable audit logging for security events
+    pub enable_audit_logging: bool,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            enable_authentication: false,
+            api_keys: Vec::new(),
+            api_key_header: "X-API-Key".to_string(),
+            enable_encryption: false,
+            encrypted_fields: vec![
+                "Citizenid".to_string(),
+                "Th_Firstname".to_string(),
+                "Th_Lastname".to_string(),
+                "full_name_en".to_string(),
+                "Address".to_string(),
+            ],
+            enable_rate_limiting: false,
+            rate_limit_requests: 60,
+            rate_limit_window_secs: 60,
+            rate_limit_max_connections: 5,
+            enable_audit_logging: false,
+        }
+    }
+}
+
+impl SecurityConfig {
+    /// Get API keys from config or environment variable
+    #[must_use]
+    pub fn get_api_keys(&self) -> Vec<String> {
+        if !self.api_keys.is_empty() {
+            return self.api_keys.clone();
+        }
+
+        // Try to read from environment variable
+        if let Ok(keys_str) = std::env::var("API_KEYS") {
+            return keys_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+
+        Vec::new()
+    }
+
+    /// Validate an API key
+    #[must_use]
+    pub fn is_valid_key(&self, key: &str) -> bool {
+        if !self.enable_authentication {
+            return true; // Authentication disabled
+        }
+
+        let valid_keys = self.get_api_keys();
+        if valid_keys.is_empty() {
+            log::warn!("⚠️ Authentication enabled but no API keys configured!");
+            return false;
+        }
+
+        valid_keys.iter().any(|k| k == key)
+    }
+
+    /// Check if a field should be encrypted
+    ///
+    /// Returns `true` if encryption is enabled and the field is in the encrypted list.
+    /// If `encrypted_fields` is empty, all fields are considered for encryption.
+    #[must_use]
+    pub fn should_encrypt_field(&self, field_name: &str) -> bool {
+        if !self.enable_encryption {
+            return false;
+        }
+
+        // If encrypted_fields is empty, encrypt all fields (not recommended)
+        if self.encrypted_fields.is_empty() {
+            return true;
+        }
+
+        // Check if field is in the encrypted list
+        self.encrypted_fields.iter().any(|f| f == field_name)
     }
 }
 

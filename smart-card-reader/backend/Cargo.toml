@@ -19,4 +19,15 @@ base64 = "0.21"
 toml = "0.8"
 eframe = "0.31"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+# TLS/SSL support for secure WebSocket (wss://)
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2.0"
+# PII Data Encryption (AES-256-GCM)
+aes-gcm = "0.10"
+rand = "0.8"
+# Rate Limiting
+parking_lot = "0.12"
+# Input Validation
+regex = "1.10"
