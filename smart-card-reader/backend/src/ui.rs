@@ -33,12 +33,16 @@ struct T {
     th_firstname: &'static str,
     th_middlename: &'static str,
     th_lastname: &'static str,
+    en_prefix: &'static str,
+    en_firstname: &'static str,
+    en_middlename: &'static str,
+    en_lastname: &'static str,
     name_en: &'static str,
     birthday: &'static str,
     sex: &'static str,
-    card_issuer: &'static str,
-    issue_date: &'static str,
-    expire_date: &'static str,
+    issuer: &'static str,
+    issue: &'static str,
+    expire: &'static str,
     address: &'static str,
     insert_card: &'static str,
     insert_card_hint: &'static str,
@@ -60,12 +64,16 @@ const EN: T = T {
     th_firstname: "First Name (TH):",
     th_middlename: "Middle Name (TH):",
     th_lastname: "Last Name (TH):",
+    en_prefix: "Prefix (EN):",
+    en_firstname: "First Name (EN):",
+    en_middlename: "Middle Name (EN):",
+    en_lastname: "Last Name (EN):",
     name_en: "Name (EN):",
     birthday: "Date of Birth:",
     sex: "Sex:",
-    card_issuer: "Card Issuer:",
-    issue_date: "Issue Date:",
-    expire_date: "Expire Date:",
+    issuer: "Card Issuer:",
+    issue: "Issue Date:",
+    expire: "Expire Date:",
     address: "Address:",
     insert_card: "Please insert a Thai ID card",
     insert_card_hint: "Card data will appear here automatically.",
@@ -87,12 +95,16 @@ const TH: T = T {
     th_firstname: "ชื่อ:",
     th_middlename: "ชื่อกลาง:",
     th_lastname: "นามสกุล:",
+    en_prefix: "Prefix (EN):",
+    en_firstname: "First Name (EN):",
+    en_middlename: "Middle Name (EN):",
+    en_lastname: "Last Name (EN):",
     name_en: "ชื่อ-นามสกุล (อังกฤษ):",
     birthday: "วันเกิด:",
     sex: "เพศ:",
-    card_issuer: "หน่วยงานออกบัตร:",
-    issue_date: "วันออกบัตร:",
-    expire_date: "วันหมดอายุ:",
+    issuer: "หน่วยงานออกบัตร:",
+    issue: "วันออกบัตร:",
+    expire: "วันหมดอายุ:",
     address: "ที่อยู่:",
     insert_card: "กรุณาใส่บัตรประชาชน",
     insert_card_hint: "ข้อมูลจะแสดงที่นี่โดยอัตโนมัติ",
@@ -582,11 +594,35 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- English name ---
-                                        ui.label(egui::RichText::new(tr.name_en).strong());
+                                        ui.label(egui::RichText::new(tr.en_prefix).strong());
                                         ui.label(if data_hidden {
-                                            mask(&data.full_name_en)
+                                            mask(&data.en_prefix)
                                         } else {
-                                            data.full_name_en.clone()
+                                            data.en_prefix.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.en_firstname).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.en_firstname)
+                                        } else {
+                                            data.en_firstname.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.en_middlename).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.en_middlename)
+                                        } else {
+                                            data.en_middlename.clone()
+                                        });
+                                        ui.end_row();
+
+                                        ui.label(egui::RichText::new(tr.en_lastname).strong());
+                                        ui.label(if data_hidden {
+                                            mask(&data.en_lastname)
+                                        } else {
+                                            data.en_lastname.clone()
                                         });
                                         ui.end_row();
 
@@ -608,27 +644,27 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- Card meta ---
-                                        ui.label(egui::RichText::new(tr.card_issuer).strong());
+                                        ui.label(egui::RichText::new(tr.issuer).strong());
                                         ui.label(if data_hidden {
-                                            mask(&data.card_issuer)
+                                            mask(&data.issuer)
                                         } else {
-                                            data.card_issuer.clone()
+                                            data.issuer.clone()
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.issue_date).strong());
+                                        ui.label(egui::RichText::new(tr.issue).strong());
                                         ui.label(if data_hidden {
                                             mask("")
                                         } else {
-                                            format_thai_date(&data.issue_date)
+                                            format_thai_date(&data.issue)
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.expire_date).strong());
+                                        ui.label(egui::RichText::new(tr.expire).strong());
                                         ui.label(if data_hidden {
                                             mask("")
                                         } else {
-                                            format_thai_date(&data.expire_date)
+                                            format_thai_date(&data.expire)
                                         });
                                         ui.end_row();
 

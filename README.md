@@ -127,17 +127,22 @@ level = "info"   # trace | debug | info | warn | error
   "Th_Firstname": "สมชาย",
   "Th_Middlename": "",
   "Th_Lastname": "ใจดี",
+  "En_Firstname": "Somchai",
+  "En_Lastname": "Jaidee",
+  "En_Prefix": "Mr.",
   "full_name_en": "Mr. Somchai Jaidee",
   "Birthday": "2520/04/13",
   "Sex": "1",
-  "card_issuer": "ที่ว่าการอำเภอเมืองกรุงเทพมหานคร",
-  "issue_date": "2566/03/01",
-  "expire_date": "2576/04/12",
+  "issuer": "ที่ว่าการอำเภอเมืองกรุงเทพมหานคร",
+  "issue": "2566/03/01",
+  "expire": "2576/04/12",
   "Address": "99 หมู่ที่ 4 ตำบลบางรัก อำเภอเมือง จังหวัดกรุงเทพมหานคร",
   "addrHouseNo": "99",
   "addrVillageNo": "หมู่ที่ 4",
   "addrTambol": "ตำบลบางรัก",
   "addrAmphur": "อำเภอเมือง",
+  "addrProvince": "จังหวัดกรุงเทพมหานคร",
+  "regui "
   "PhotoRaw": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U..."
 }
 ```
@@ -159,12 +164,16 @@ level = "info"   # trace | debug | info | warn | error
 | `Th_Firstname` | ชื่อ | String (Thai) |
 | `Th_Middlename` | ชื่อกลาง (อาจว่าง) | String (Thai) |
 | `Th_Lastname` | นามสกุล | String (Thai) |
+| `En_Firstname` | ชื่อ ภาษาอังกฤษ | String |
+| `En_Middlenamee` | ชื่อกลาง ภาษาอังกฤษ | String |
+| `En_Lastname` | นามสกุล ภาษาอังกฤษ | String |
+| `En_Prefix` | คำนำหน้า | String (English) |
 | `full_name_en` | ชื่อ-นามสกุล ภาษาอังกฤษ | String |
 | `Birthday` | วันเกิด (พ.ศ.) | `YYYY/MM/DD` |
 | `Sex` | เพศ | `"1"` = ชาย, อื่นๆ = หญิง |
-| `card_issuer` | หน่วยงานออกบัตร | String (Thai) |
-| `issue_date` | วันออกบัตร (พ.ศ.) | `YYYY/MM/DD` |
-| `expire_date` | วันหมดอายุ (พ.ศ.) | `YYYY/MM/DD` |
+| `Issuer` | หน่วยงานออกบัตร | String (Thai) |
+| `issue` | วันออกบัตร (พ.ศ.) | `YYYY/MM/DD` |
+| `expire` | วันหมดอายุ (พ.ศ.) | `YYYY/MM/DD` |
 | `Address` | ที่อยู่รวม (house+village+tambol+amphur+province) | String (Thai) |
 | `addrHouseNo` | เลขที่บ้าน | String |
 | `addrVillageNo` | หมู่ที่ | String (Thai) |
@@ -172,7 +181,7 @@ level = "info"   # trace | debug | info | warn | error
 | `addrAmphur` | อำเภอ/เขต | String (Thai) |
 | `PhotoRaw` | รูปภาพบนบัตร | Base64 JPEG |
 
-> **หมายเหตุ:** `Birthday`, `issue_date`, `expire_date` เป็น **ปี พ.ศ.** (Buddhist Era) format `YYYY/MM/DD`
+> **หมายเหตุ:** `Birthday`, `issue`, `expire` เป็น **ปี พ.ศ.** (Buddhist Era) format `YYYY/MM/DD`
 
 ---
 
@@ -196,6 +205,7 @@ Fields ที่ HIS ใช้:
 - `patientData.Birthday` → parse ด้วย `moment(val, 'YYYY/MM/DD')`
 - `patientData.addrTambol` → `.replace('ตำบล','')` แล้ว query `/framework/area/search`
 - `patientData.addrAmphur` → `.replace('อำเภอ','')` แล้ว filter area
+- `patientData.addrProvince` → `.replace('จังหวัด','')` แล้ว filter area
 - `patientData.PhotoRaw` → `'data:image/jpeg;base64,' + val`
 
 > **Port 8181** ใช้สำหรับ `ScannerUrl` (เครื่อง scan เอกสาร) — **ห้ามใช้ port นี้**
