@@ -23,8 +23,8 @@ function sexLabel(s: string) {
 
 export function CardInfo({ data }: Props) {
   const dobTh    = dTh(data.Birthday)
-  const issueTh  = dTh(data.issue_date)
-  const expireTh = dTh(data.expire_date)
+  const issueTh  = dTh(data.Issue)
+  const expireTh = dTh(data.Expire)
 
   const fullNameTh = [data.Th_Prefix, data.Th_Firstname, data.Th_Middlename, data.Th_Lastname]
     .filter(Boolean).join(' ')
@@ -65,7 +65,7 @@ export function CardInfo({ data }: Props) {
 
         {/* English Name */}
         <div className="id-field">
-          <label>NAME-SURNAME (ENGLISH)</label>
+          <label>FIRSTNAME-LASTNAME (ENGLISH)</label>
           <div className="id-value">{data.full_name_en || '-'}</div>
         </div>
 
@@ -92,7 +92,16 @@ export function CardInfo({ data }: Props) {
             <div className="id-value">{data.addrVillageNo || '-'}</div>
           </div>
         </div>
-
+        <div className="id-row">
+          <div className="id-field half">
+            <label>ซอย</label>
+            <div className="id-value">{data.addrLane || '-'}</div>
+          </div>
+          <div className="id-field half">
+            <label>ถนน</label>
+            <div className="id-value">{data.addrRoad || '-'}</div>
+          </div>
+        </div>
         <div className="id-row">
           <div className="id-field half">
             <label>ตำบล/แขวง</label>
@@ -101,6 +110,12 @@ export function CardInfo({ data }: Props) {
           <div className="id-field half">
             <label>อำเภอ/เขต</label>
             <div className="id-value">{data.addrAmphur || '-'}</div>
+          </div>
+        </div>
+        <div className="id-row">
+          <div className="id-field half">
+            <label>จังหวัด</label>
+            <div className="id-value">{data.addrProvince || '-'}</div>
           </div>
         </div>
 

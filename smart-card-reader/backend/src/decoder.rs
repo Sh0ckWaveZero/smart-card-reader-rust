@@ -22,23 +22,35 @@ pub struct ThaiIDData {
     pub th_firstname: String,
     pub th_middlename: String,
     pub th_lastname: String,
+
+    pub en_prefix: String,
+    pub en_firstname: String,
+    pub en_middlename: String,
+    pub en_lastname: String,
+
     // --- English name (full, from card) ---
     pub full_name_en: String,
     // --- Date / Sex ---
     pub birthday: String, // YYYYMMDD (Buddhist Era from card)
     pub sex: String,      // "1" = male, other = female
     // --- Card meta ---
-    pub card_issuer: String,
-    pub issue_date: String,
-    pub expire_date: String,
+    pub issuer: String,
+    pub issue: String,
+    pub expire: String,
     // --- Address components ---
     pub address: String, // full combined address (raw from card)
     pub addr_house_no: String,
     pub addr_village_no: String,
+    pub addr_road: String,
+    pub addr_lane: String,
     pub addr_tambol: String,
     pub addr_amphur: String,
+    pub addr_province: String,
     // --- Photo ---
     pub photo: String, // Base64 encoded
+
+    // --- Nationality ---
+    pub nationality: String, // e.g. "THA"
 }
 
 pub fn decode_tis620(bytes: &[u8]) -> String {
@@ -68,16 +80,6 @@ pub fn mask_citizen_id(citizen_id: &str) -> String {
     } else {
         let last_4 = &citizen_id[citizen_id.len() - 4..];
         format!("{}*{}", "*".repeat(citizen_id.len() - 4), last_4)
-    }
-}
-
-/// Mask address for logging - only show province to prevent location identification
-/// Example: "99 หมู่ที่ 4 ตำบลบางรัก อำเภอเมือง จังหวัดกรุงเทพมหานคร" → "[hidden] จังหวัดกรุงเทพมหานคร"
-pub fn mask_address(province: &str) -> String {
-    if province.is_empty() {
-        "[masked address]".to_string()
-    } else {
-        format!("[hidden] {}", province)
     }
 }
 
@@ -133,17 +135,25 @@ pub fn apply_output_config(data: &ThaiIDData, config: &OutputConfig) -> Value {
         ("Th_Firstname", &data.th_firstname),
         ("Th_Middlename", &data.th_middlename),
         ("Th_Lastname", &data.th_lastname),
+        ("En_Prefix", &data.en_prefix),
+        ("En_Firstname", &data.en_firstname),
+        ("En_Middlename", &data.en_middlename),
+        ("En_Lastname", &data.en_lastname),
         ("full_name_en", &data.full_name_en),
         ("Birthday", &data.birthday),
         ("Sex", &data.sex),
-        ("card_issuer", &data.card_issuer),
-        ("issue_date", &data.issue_date),
-        ("expire_date", &data.expire_date),
+        ("Issuer", &data.issuer),
+        ("Issue", &data.issue),
+        ("Expire", &data.expire),
         ("Address", &data.address),
         ("addrHouseNo", &data.addr_house_no),
         ("addrVillageNo", &data.addr_village_no),
+        ("addrRoad", &data.addr_road),
+        ("addrLane", &data.addr_lane),
         ("addrTambol", &data.addr_tambol),
         ("addrAmphur", &data.addr_amphur),
+        ("addrProvince", &data.addr_province),
+        ("Nationality", &data.nationality),
     ];
 
     // Process each field
@@ -158,6 +168,17 @@ pub fn apply_output_config(data: &ThaiIDData, config: &OutputConfig) -> Value {
     if config.include_photo && config.is_field_enabled("PhotoRaw") {
         let output_name = config.get_field_name("PhotoRaw").to_owned();
         result.insert(output_name, json!(&data.photo));
+    }
+
+    // Handle nationality separately
+    if config.is_field_enabled("Nationality") {
+        let output_name = config.get_field_name("Nationality").to_owned();
+        result.insert(output_name, json!(&data.nationality));
+    } else {
+        // If nationality is not enabled, you can choose to insert a default value or skip it
+        // For example, inserting a null value:
+        let output_name = config.get_field_name("Nationality").to_owned();
+        result.insert(output_name, json!("THA"));
     }
 
     Value::Object(result)

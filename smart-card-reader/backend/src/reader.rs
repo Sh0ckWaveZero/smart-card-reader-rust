@@ -234,18 +234,24 @@ impl CardReader {
         let citizen_id   = read_field("citizen_id")?;
         let date_of_birth = read_field("date_of_birth")?;
         let sex           = read_field("gender")?;
-        let card_issuer   = read_field("card_issuer").unwrap_or_default();
-        let issue_date    = read_field("issue_date")?;
-        let expire_date   = read_field("expire_date")?;
+        let issuer        = read_field("issuer").unwrap_or_default();
+        let issue    = read_field("issue")?;
+        let mut expire   = read_field("expire")?;
         let full_name_en  = read_field("full_name_en")?;
 
         // Thai name: "คำนำหน้า#ชื่อ#ชื่อกลาง#นามสกุล"
         let name_th_raw = read_field_raw("full_name_th")?;
         let name_parts = split_tis620(name_th_raw, 4);
+        let name_en_raw = read_field_raw("full_name_en")?;
+        let en_name_parts = split_tis620(name_en_raw, 4);
         let th_prefix     = name_parts[0].clone();
         let th_firstname  = name_parts[1].clone();
         let th_middlename = name_parts[2].clone();
         let th_lastname   = name_parts[3].clone();
+        let en_prefix     = en_name_parts[0].clone();
+        let en_firstname  = en_name_parts[1].clone();
+        let en_middlename = en_name_parts[2].clone();
+        let en_lastname   = en_name_parts[3].clone();
 
         // Address on Thai ID card
         // Thai ID card address format: [#]เลขที่#หมู่ที่#ตำบล#อำเภอ#จังหวัด#...
@@ -277,10 +283,11 @@ impl CardReader {
             let (cow, _, _) = WINDOWS_874.decode(&addr_raw_clean);
             cow.split('#')
                 .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ").nfc().collect::<String>())
-                .filter(|s| !s.is_empty())
+                // .filter(|s| !s.is_empty())
                 .collect()
         };
         debug!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
+        info!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
 
         // Strip any trailing non-Thai-letter content from a part
         // (Thai letters: U+0E01-U+0E2E, U+0E30-U+0E3A, U+0E40-U+0E45, U+0E47-U+0E4E)
@@ -295,22 +302,46 @@ impl CardReader {
                     || c == ' '
                 })
                 .collect();
-            clean.split_whitespace().collect::<Vec<_>>().join(" ")
+            // Thai place names never have single-character words; filter them out
+            // to eliminate stray garbage bytes that happen to decode as valid Thai chars
+            clean.split_whitespace()
+                .filter(|w| w.chars().count() >= 2)
+                .collect::<Vec<_>>()
+                .join(" ")
         };
 
         let addr_house_no   = addr_meaningful_parts.get(0).cloned().unwrap_or_default();
         let addr_village_no = addr_meaningful_parts.get(1).cloned().unwrap_or_default();
-        let addr_tambol     = addr_meaningful_parts.get(2).map(|s| strip_garbage(s)).unwrap_or_default();
-        let addr_amphur     = addr_meaningful_parts.get(3).map(|s| strip_garbage(s)).unwrap_or_default();
-        let addr_province   = addr_meaningful_parts.get(4).map(|s| strip_garbage(s)).unwrap_or_default();
-        info!("Address: {}", decoder::mask_address(&addr_province));
-        // Full address: house + village + tambol + amphur + province
-        let address = [&addr_house_no, &addr_village_no, &addr_tambol, &addr_amphur, &addr_province]
+        let addr_lane = addr_meaningful_parts.get(2).cloned().unwrap_or_default();
+        let addr_road = addr_meaningful_parts.get(3).cloned().unwrap_or_default();
+
+        // Thai ID card address can be 7 or 8 fields depending on card variant:
+        //   7-field: house#village#lane#road#tambol#amphur#province         (indices 4,5,6)
+        //   8-field: house#village#lane#road#(empty)#tambol#amphur#province (indices 5,6,7)
+        // Detect by checking if index 4 is non-empty after strip_garbage.
+        let part4_clean = addr_meaningful_parts.get(4).map(|s| strip_garbage(s)).unwrap_or_default();
+
+        info!("Determined address format: part4='{}' → {}", part4_clean, if part4_clean.is_empty() { "8-field" } else { "7-field" });
+
+        let (tambol_idx, amphur_idx, province_idx) = if part4_clean.is_empty() {
+            (5, 6, 7) // 8-field format: index 4 is empty filler
+        } else {
+            (4, 5, 6) // 7-field format: tambol starts at index 4
+        };
+        let addr_tambol   = addr_meaningful_parts.get(tambol_idx).map(|s| strip_garbage(s)).unwrap_or_default();
+        let addr_amphur   = addr_meaningful_parts.get(amphur_idx).map(|s| strip_garbage(s)).unwrap_or_default();
+        let addr_province = addr_meaningful_parts.get(province_idx).map(|s| strip_garbage(s)).unwrap_or_default();
+
+        info!("Cleaned address components: house_no='{}', village_no='{}', road='{}', lane='{}', tambol='{}', amphur='{}', province='{}'",
+            addr_house_no, addr_village_no, addr_road, addr_lane, addr_tambol, addr_amphur, addr_province
+        );
+
+        // Full address: house + village + road + lane + tambol + amphur + province
+        let address = [&addr_house_no, &addr_village_no, &addr_road, &addr_lane, &addr_tambol, &addr_amphur, &addr_province]
             .iter()
-            .filter(|s| !s.is_empty())
             .map(|s| s.as_str())
             .collect::<Vec<_>>()
-            .join(" ");
+            .join(" "); 
 
         // Read Photo using configured chunk APDUs
         let mut photo_chunks = Vec::new();
@@ -348,24 +379,37 @@ impl CardReader {
             }
         };
 
+        let nationality: String = "THA".to_string();
+        if expire == "99999999" {
+            expire = "29991231".to_string(); // Treat "99999999" as "31 Dec 2599 for practical purposes
+        }
+
         Ok(decoder::ThaiIDData {
             citizen_id,
             th_prefix,
             th_firstname,
             th_middlename,
             th_lastname,
+            en_prefix,
+            en_firstname,
+            en_middlename,
+            en_lastname,
             full_name_en,
             birthday: format_date_slash(&date_of_birth),
             sex,
-            card_issuer,
-            issue_date: format_date_slash(&issue_date),
-            expire_date: format_date_slash(&expire_date),
+            issuer,
+            issue: format_date_slash(&issue),
+            expire: format_date_slash(&expire),
             address,
             addr_house_no,
             addr_village_no,
+            addr_road,
+            addr_lane,
             addr_tambol,
             addr_amphur,
+            addr_province,
             photo,
+            nationality
         })
     }
 

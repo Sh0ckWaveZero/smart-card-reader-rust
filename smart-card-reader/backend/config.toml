@@ -48,18 +48,25 @@ Th_Prefix     = "Th_Prefix"
 Th_Firstname  = "Th_Firstname"
 Th_Middlename = "Th_Middlename"
 Th_Lastname   = "Th_Lastname"
+En_Firstname  = "En_Firstname"
+En_Lastname   = "En_Lastname"
+En_Prefix     = "En_Prefix"
 full_name_en  = "full_name_en"
 Birthday      = "Birthday"
 Sex           = "Sex"
-card_issuer   = "card_issuer"
-issue_date    = "issue_date"
-expire_date   = "expire_date"
+Issuer        = "Issuer"
+Issue         = "Issue"
+Expire        = "Expire"
 Address       = "Address"
 addrHouseNo   = "addrHouseNo"
 addrVillageNo = "addrVillageNo"
+addrRoad      = "addrRoad"
+addrLane      = "addrLane"
 addrTambol    = "addrTambol"
 addrAmphur    = "addrAmphur"
+addrProvince  = "addrProvince"
 PhotoRaw      = "PhotoRaw"
+Nationality   = "Nationality"
 
 [ui]
 # Application window settings
@@ -169,17 +176,17 @@ apdu = "80B000E1020001"
 required = true
 
 [[card.fields]]
-name = "card_issuer"
+name = "issuer"
 apdu = "80B000F6020064"
 required = false
 
 [[card.fields]]
-name = "issue_date"
+name = "issue"
 apdu = "80B00167020008"
 required = true
 
 [[card.fields]]
-name = "expire_date"
+name = "expire"
 apdu = "80B0016F020008"
 required = true
 

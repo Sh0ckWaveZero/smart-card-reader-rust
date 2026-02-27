@@ -236,8 +236,8 @@ fn main() {
                             let validation_errors = crate::validation::CardDataValidator::validate_all(
                                 Some(&data.citizen_id),
                                 Some(&data.birthday),
-                                Some(&data.issue_date),
-                                Some(&data.expire_date),
+                                Some(&data.issue),
+                                Some(&data.expire),
                                 Some(&data.sex),
                                 Some(&thai_name),
                                 Some(&data.full_name_en),

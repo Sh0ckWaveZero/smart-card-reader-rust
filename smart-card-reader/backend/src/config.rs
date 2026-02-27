@@ -542,17 +542,17 @@ impl Default for CardConfig {
                     required: true,
                 },
                 ApduCommand {
-                    name: "card_issuer".to_owned(),
+                    name: "issuer".to_owned(),
                     apdu: "80B000F6020064".to_owned(),
                     required: false,
                 },
                 ApduCommand {
-                    name: "issue_date".to_owned(),
+                    name: "issue".to_owned(),
                     apdu: "80B00167020008".to_owned(),
                     required: true,
                 },
                 ApduCommand {
-                    name: "expire_date".to_owned(),
+                    name: "expire".to_owned(),
                     apdu: "80B0016F020008".to_owned(),
                     required: true,
                 },
@@ -560,7 +560,7 @@ impl Default for CardConfig {
                     name: "address".to_owned(),
                     apdu: "80B015790200FF".to_owned(),
                     required: false,
-                },
+                }
             ],
             photo_chunks: vec![
                 "80B0017B0200FF".to_owned(),
