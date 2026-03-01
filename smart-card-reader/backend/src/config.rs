@@ -500,10 +500,14 @@ pub struct CardConfig {
     pub photo_chunks: Vec<String>,
     /// Number of connection retry attempts
     pub retry_attempts: u8,
-    /// Delay between retries in milliseconds
+    /// Delay between connection retries in milliseconds
     pub retry_delay_ms: u64,
     /// Delay after card insertion before reading (ms)
     pub card_settle_delay_ms: u64,
+    /// Number of read retry attempts per connection
+    pub read_retry_attempts: u8,
+    /// Delay between read retries in milliseconds
+    pub read_retry_delay_ms: u64,
 }
 
 fn default_true() -> bool {
@@ -587,6 +591,8 @@ impl Default for CardConfig {
             retry_attempts: 3,
             retry_delay_ms: 500,
             card_settle_delay_ms: 500,
+            read_retry_attempts: 3,
+            read_retry_delay_ms: 300,
         }
     }
 }

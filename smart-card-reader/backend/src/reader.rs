@@ -121,6 +121,8 @@ impl CardReader {
                     let retry_attempts = self.config.retry_attempts;
                     let retry_delay = Duration::from_millis(self.config.retry_delay_ms);
                     let settle_delay = Duration::from_millis(self.config.card_settle_delay_ms);
+                    let read_retry_attempts = self.config.read_retry_attempts;
+                    let read_retry_delay = Duration::from_millis(self.config.read_retry_delay_ms);
 
                     let mut read_success = false;
                     for attempt in 1..=retry_attempts {
@@ -131,20 +133,20 @@ impl CardReader {
                             Ok(card) => {
                                 info!("Card connected in reader: {} (attempt {})", name, attempt);
 
-                                // Retry read operation up to 3 times
-                                for read_attempt in 1..=3 {
+                                // Retry read operation with configurable attempts
+                                for read_attempt in 1..=read_retry_attempts {
                                     match self.read_thai_id(&card) {
                                         Ok(data) => {
-                                            info!("Successfully read Thai ID: {} (read attempt {}/3)",
-                                                decoder::mask_citizen_id(&data.citizen_id), read_attempt);
+                                            info!("Successfully read Thai ID: {} (read attempt {}/{})",
+                                                decoder::mask_citizen_id(&data.citizen_id), read_attempt, read_retry_attempts);
                                             on_card_event(decoder::CardEvent::Inserted(data));
                                             read_success = true;
                                             break;
                                         }
                                         Err(e) => {
-                                            warn!("Failed to read card data (read attempt {}/3): {}", read_attempt, e);
-                                            if read_attempt < 3 {
-                                                sleep(Duration::from_millis(300)).await;
+                                            warn!("Failed to read card data (read attempt {}/{}): {}", read_attempt, read_retry_attempts, e);
+                                            if read_attempt < read_retry_attempts {
+                                                sleep(read_retry_delay).await;
                                             }
                                         }
                                     }
@@ -167,7 +169,7 @@ impl CardReader {
                     if read_success {
                         card_present.insert(name);
                     } else {
-                        error!("Failed to read card after {} connection attempts with 3 read retries each. Will retry on next poll cycle.", retry_attempts);
+                        error!("Failed to read card after {} connection attempts with {} read retries each. Will retry on next poll cycle.", retry_attempts, read_retry_attempts);
                     }
                 } else if !is_present && card_present.contains(&name) {
                     // Card removed — allow re-read on next insert
@@ -287,7 +289,6 @@ impl CardReader {
                 .collect()
         };
         debug!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
-        info!("Address meaningful parts ({}): {:?}", addr_meaningful_parts.len(), addr_meaningful_parts);
 
         // Strip any trailing non-Thai-letter content from a part
         // (Thai letters: U+0E01-U+0E2E, U+0E30-U+0E3A, U+0E40-U+0E45, U+0E47-U+0E4E)
@@ -321,7 +322,7 @@ impl CardReader {
         // Detect by checking if index 4 is non-empty after strip_garbage.
         let part4_clean = addr_meaningful_parts.get(4).map(|s| strip_garbage(s)).unwrap_or_default();
 
-        info!("Determined address format: part4='{}' → {}", part4_clean, if part4_clean.is_empty() { "8-field" } else { "7-field" });
+        debug!("Determined address format: part4='{}' → {}", part4_clean, if part4_clean.is_empty() { "8-field" } else { "7-field" });
 
         let (tambol_idx, amphur_idx, province_idx) = if part4_clean.is_empty() {
             (5, 6, 7) // 8-field format: index 4 is empty filler
@@ -332,9 +333,8 @@ impl CardReader {
         let addr_amphur   = addr_meaningful_parts.get(amphur_idx).map(|s| strip_garbage(s)).unwrap_or_default();
         let addr_province = addr_meaningful_parts.get(province_idx).map(|s| strip_garbage(s)).unwrap_or_default();
 
-        info!("Cleaned address components: house_no='{}', village_no='{}', road='{}', lane='{}', tambol='{}', amphur='{}', province='{}'",
-            addr_house_no, addr_village_no, addr_road, addr_lane, addr_tambol, addr_amphur, addr_province
-        );
+        debug!("Cleaned address components: house_no='***', village_no='***', road='***', lane='***', tambol='***', amphur='***', province='***'");
+        // Note: Actual address data available in debug logs only (set RUST_LOG=debug to enable)
 
         // Full address: house + village + road + lane + tambol + amphur + province
         let address = [&addr_house_no, &addr_village_no, &addr_road, &addr_lane, &addr_tambol, &addr_amphur, &addr_province]

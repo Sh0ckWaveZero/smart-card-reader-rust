@@ -186,8 +186,10 @@ fn get_font_paths(font_config: &FontConfig) -> Vec<std::path::PathBuf> {
 
 fn setup_fonts(ctx: &egui::Context, font_config: &FontConfig) {
     let mut fonts = egui::FontDefinitions::default();
+    let mut font_loaded = false;
 
-    log::info!("Searching for Thai fonts...");
+    // Try to load NotoSansThai Regular font
+    log::info!("Searching for Thai font...");
     for path in get_font_paths(font_config) {
         log::debug!("Checking font path: {:?}", path);
         if let Ok(font_data) = std::fs::read(&path) {
@@ -195,47 +197,61 @@ fn setup_fonts(ctx: &egui::Context, font_config: &FontConfig) {
             fonts
                 .font_data
                 .insert("noto_sans_thai".to_owned(), std::sync::Arc::new(font_data));
-
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_insert_with(Vec::new)
-                .insert(0, "noto_sans_thai".to_owned());
-
-            fonts
-                .families
-                .entry(egui::FontFamily::Monospace)
-                .or_insert_with(Vec::new)
-                .insert(0, "noto_sans_thai".to_owned());
-
-            log::info!("Loaded Thai font from: {:?}", path);
-            ctx.set_fonts(fonts);
-
-            // Set larger font size
-            let mut style = (*ctx.style()).clone();
-            style.text_styles.insert(
-                egui::TextStyle::Body,
-                egui::FontId::new(16.0, egui::FontFamily::Proportional),
-            );
-            style.text_styles.insert(
-                egui::TextStyle::Heading,
-                egui::FontId::new(22.0, egui::FontFamily::Proportional),
-            );
-            style.text_styles.insert(
-                egui::TextStyle::Monospace,
-                egui::FontId::new(14.0, egui::FontFamily::Monospace),
-            );
-            ctx.set_style(style);
-            return;
+            log::info!("✓ Loaded Thai font from: {:?}", path);
+            font_loaded = true;
+            break;
         }
     }
 
-    log::warn!("Thai font not found! Tried the following paths:");
-    for path in get_font_paths(font_config) {
-        log::warn!("  - {:?} (exists: {})", path, path.exists());
+    if font_loaded {
+        // Add font to both Proportional and Monospace families
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_insert_with(Vec::new)
+            .insert(0, "noto_sans_thai".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_insert_with(Vec::new)
+            .insert(0, "noto_sans_thai".to_owned());
+
+        ctx.set_fonts(fonts);
+
+        // Set font sizes for all text styles
+        let mut style = (*ctx.style()).clone();
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::new(12.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Body,
+            egui::FontId::new(16.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(16.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(22.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::new(14.0, egui::FontFamily::Monospace),
+        );
+        ctx.set_style(style);
+
+        log::info!("✓ Thai font configured successfully");
+    } else {
+        log::warn!("Thai font not found! Tried the following paths:");
+        for path in get_font_paths(font_config) {
+            log::warn!("  - {:?} (exists: {})", path, path.exists());
+        }
+        log::warn!("Thai text will display as boxes. Please ensure NotoSansThai-Regular.ttf is available.");
+        ctx.set_fonts(fonts);
     }
-    log::warn!("Thai text will display as boxes. Please ensure a Thai font is available.");
-    ctx.set_fonts(fonts);
 }
 
 // Embedded flag images (PNG bytes baked into binary)
@@ -255,6 +271,7 @@ pub struct SmartCardApp {
     font_config: FontConfig,
     data_hidden: bool,
     lang: Language,
+    dark_mode: bool,
 }
 
 impl SmartCardApp {
@@ -275,6 +292,7 @@ impl SmartCardApp {
             font_config,
             data_hidden: true,
             lang: Language::Th,
+            dark_mode: true,
         }
     }
 
@@ -352,6 +370,13 @@ impl SmartCardApp {
 
 impl eframe::App for SmartCardApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Apply theme
+        if self.dark_mode {
+            ctx.set_visuals(egui::Visuals::dark());
+        } else {
+            ctx.set_visuals(egui::Visuals::light());
+        }
+
         // Setup fonts only once
         if !self.fonts_configured {
             setup_fonts(ctx, &self.font_config);
@@ -394,7 +419,7 @@ impl eframe::App for SmartCardApp {
         let tr = t(self.lang);
         egui::TopBottomPanel::top("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(tr.app_title).strong());
+                ui.label(egui::RichText::new(tr.app_title).size(16.0));
                 ui.separator();
                 ui.label(format!("{} {}", tr.websocket, self.ws_url));
                 ui.separator();
@@ -421,9 +446,9 @@ impl eframe::App for SmartCardApp {
                                 .min_size(egui::vec2(30.0, 0.0)),
                             );
                             if let Some(tex) = flag_tex {
-                                let size = tex.size_vec2();
-                                let scale = 20.0 / size.y;
-                                ui.add(egui::Image::new((tex.id(), size * scale)));
+                                // Fixed size for both flags to ensure consistency
+                                let flag_size = egui::vec2(30.0, 20.0);
+                                ui.add(egui::Image::new(tex).fit_to_exact_size(flag_size));
                             }
                             resp.clicked()
                         })
@@ -431,6 +456,21 @@ impl eframe::App for SmartCardApp {
 
                     if clicked {
                         self.lang = next_lang;
+                    }
+
+                    ui.separator();
+
+                    // Theme toggle button
+                    let theme_icon = if self.dark_mode { "☀" } else { "🌙" };
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new(theme_icon).size(18.0))
+                                .min_size(egui::vec2(30.0, 0.0)),
+                        )
+                        .on_hover_text(if self.dark_mode { "Switch to Light Mode" } else { "Switch to Dark Mode" })
+                        .clicked()
+                    {
+                        self.dark_mode = !self.dark_mode;
                     }
 
                     // Show/hide toggle - only when card data is present
@@ -495,47 +535,72 @@ impl eframe::App for SmartCardApp {
                             // Left side - Photo
                             ui.vertical(|ui| {
                                 ui.heading(tr.photo);
+                                let bg_color = if self.dark_mode {
+                                    egui::Color32::from_rgb(40, 45, 60)
+                                } else {
+                                    egui::Color32::from_rgb(230, 235, 245)
+                                };
+                                let text_color = if self.dark_mode {
+                                    egui::Color32::from_rgb(100, 116, 139)
+                                } else {
+                                    egui::Color32::from_rgb(100, 116, 139)
+                                };
+
                                 if data_hidden {
                                     let (rect, _) = ui.allocate_exact_size(
                                         egui::vec2(PHOTO_W, PHOTO_H),
                                         egui::Sense::hover(),
                                     );
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        8.0,
-                                        egui::Color32::from_rgb(40, 45, 60),
-                                    );
+                                    ui.painter().rect_filled(rect, 8.0, bg_color);
                                     ui.painter().text(
                                         rect.center(),
                                         egui::Align2::CENTER_CENTER,
                                         "🔒",
                                         egui::FontId::proportional(36.0),
-                                        egui::Color32::from_rgb(100, 116, 139),
+                                        text_color,
                                     );
                                 } else if let Some(texture) = &self.photo_texture {
-                                    ui.add(
-                                        egui::Image::new((
-                                            texture.id(),
-                                            egui::vec2(PHOTO_W, PHOTO_H),
-                                        ))
-                                        .fit_to_exact_size(egui::vec2(PHOTO_W, PHOTO_H)),
+                                    // Calculate scaled size maintaining aspect ratio
+                                    let tex_size = texture.size_vec2();
+                                    let aspect = tex_size.x / tex_size.y;
+                                    let container_aspect = PHOTO_W / PHOTO_H;
+
+                                    let (scaled_w, scaled_h) = if aspect > container_aspect {
+                                        // Image is wider - fit to width
+                                        (PHOTO_W, PHOTO_W / aspect)
+                                    } else {
+                                        // Image is taller - fit to height
+                                        (PHOTO_H * aspect, PHOTO_H)
+                                    };
+
+                                    // Allocate space for the scaled image (not full container)
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        egui::vec2(scaled_w, scaled_h),
+                                        egui::Sense::hover(),
+                                    );
+
+                                    // Draw background frame exactly matching image size
+                                    ui.painter().rect_filled(rect, 8.0, bg_color);
+
+                                    // Draw image filling the frame
+                                    ui.painter().image(
+                                        texture.id(),
+                                        rect,
+                                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                        egui::Color32::WHITE,
                                     );
                                 } else {
                                     let (rect, _) = ui.allocate_exact_size(
                                         egui::vec2(PHOTO_W, PHOTO_H),
                                         egui::Sense::hover(),
                                     );
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        8.0,
-                                        egui::Color32::from_rgb(40, 45, 60),
-                                    );
+                                    ui.painter().rect_filled(rect, 8.0, bg_color);
                                     ui.painter().text(
                                         rect.center(),
                                         egui::Align2::CENTER_CENTER,
                                         tr.no_photo,
                                         egui::FontId::proportional(14.0),
-                                        egui::Color32::from_rgb(100, 116, 139),
+                                        text_color,
                                     );
                                 }
                             });
@@ -552,7 +617,7 @@ impl eframe::App for SmartCardApp {
                                     .spacing([20.0, 8.0])
                                     .show(ui, |ui| {
                                         // --- Identity ---
-                                        ui.label(egui::RichText::new(tr.citizen_id).strong());
+                                        ui.label(tr.citizen_id);
                                         ui.label(if data_hidden {
                                             mask(&data.citizen_id)
                                         } else {
@@ -561,7 +626,7 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- Thai name components ---
-                                        ui.label(egui::RichText::new(tr.th_prefix).strong());
+                                        ui.label(tr.th_prefix);
                                         ui.label(if data_hidden {
                                             mask(&data.th_prefix)
                                         } else {
@@ -569,7 +634,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.th_firstname).strong());
+                                        ui.label(tr.th_firstname);
                                         ui.label(if data_hidden {
                                             mask(&data.th_firstname)
                                         } else {
@@ -577,7 +642,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.th_middlename).strong());
+                                        ui.label(tr.th_middlename);
                                         ui.label(if data_hidden {
                                             mask(&data.th_middlename)
                                         } else {
@@ -585,7 +650,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.th_lastname).strong());
+                                        ui.label(tr.th_lastname);
                                         ui.label(if data_hidden {
                                             mask(&data.th_lastname)
                                         } else {
@@ -594,7 +659,7 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- English name ---
-                                        ui.label(egui::RichText::new(tr.en_prefix).strong());
+                                        ui.label(tr.en_prefix);
                                         ui.label(if data_hidden {
                                             mask(&data.en_prefix)
                                         } else {
@@ -602,7 +667,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.en_firstname).strong());
+                                        ui.label(tr.en_firstname);
                                         ui.label(if data_hidden {
                                             mask(&data.en_firstname)
                                         } else {
@@ -610,7 +675,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.en_middlename).strong());
+                                        ui.label(tr.en_middlename);
                                         ui.label(if data_hidden {
                                             mask(&data.en_middlename)
                                         } else {
@@ -618,7 +683,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.en_lastname).strong());
+                                        ui.label(tr.en_lastname);
                                         ui.label(if data_hidden {
                                             mask(&data.en_lastname)
                                         } else {
@@ -627,7 +692,7 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- Date / Sex ---
-                                        ui.label(egui::RichText::new(tr.birthday).strong());
+                                        ui.label(tr.birthday);
                                         ui.label(if data_hidden {
                                             mask("")
                                         } else {
@@ -635,7 +700,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.sex).strong());
+                                        ui.label(tr.sex);
                                         ui.label(if data_hidden {
                                             mask(&data.sex)
                                         } else {
@@ -644,7 +709,7 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- Card meta ---
-                                        ui.label(egui::RichText::new(tr.issuer).strong());
+                                        ui.label(tr.issuer);
                                         ui.label(if data_hidden {
                                             mask(&data.issuer)
                                         } else {
@@ -652,7 +717,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.issue).strong());
+                                        ui.label(tr.issue);
                                         ui.label(if data_hidden {
                                             mask("")
                                         } else {
@@ -660,7 +725,7 @@ impl eframe::App for SmartCardApp {
                                         });
                                         ui.end_row();
 
-                                        ui.label(egui::RichText::new(tr.expire).strong());
+                                        ui.label(tr.expire);
                                         ui.label(if data_hidden {
                                             mask("")
                                         } else {
@@ -669,7 +734,7 @@ impl eframe::App for SmartCardApp {
                                         ui.end_row();
 
                                         // --- Address (UI only shows combined address) ---
-                                        ui.label(egui::RichText::new(tr.address).strong());
+                                        ui.label(tr.address);
                                         ui.label(if data_hidden {
                                             mask(&data.address)
                                         } else {
